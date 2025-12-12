@@ -76,7 +76,7 @@ def play(random_exp):
                 action = a_onehot.argmax(-1).item()
 
                 if random_exp:
-                    if torch.rand(1) < 0.10: # 10% chance to act randomly
+                    if torch.rand(1) < 0.30: # 10% chance to act randomly
                         action = torch.randint(0, action_dim, (1,)).item()
                     else:
                         action = a_onehot.argmax(-1).item()
