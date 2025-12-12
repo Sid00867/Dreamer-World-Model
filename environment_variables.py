@@ -39,14 +39,14 @@ K = 50                      # Reduced from 50: fit to top 10%
 # ======================================================
 
 C = 35                       # Reduced from 20: Train less, act more
-batch_size = 32              # Reduced from 16: Fits in CPU cache better
+batch_size = 64              # Reduced from 16: Fits in CPU cache better
 seq_len = 8                # Reduced from 25: Faster backprop
 
 # ======================================================
 # EXPLORATION
 # ======================================================
 
-total_env_steps = 2000      # Short data collection cycles
+total_env_steps = 1000      # Short data collection cycles
 exploration_noise = 0.15    # Higher noise to find goals quickly
 action_repeat = 2
 
@@ -70,7 +70,7 @@ recon_eps = 1e-4
 psnr_eps = 0.05
 min_success = 0.20          # Stop if we hit 20% success (proof of learning)
 min_steps = 250            # Minimum interactions
-max_steps = 30000            # Hard stop after ~5-10 mins
+max_steps = 5000            # Hard stop after ~5-10 mins
 
 # ======================================================
 # TRAIN ENV
