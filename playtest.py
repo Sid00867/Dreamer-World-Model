@@ -19,21 +19,37 @@ rssmmodel = rssm().to(DEVICE)
 rssmmodel.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
 rssmmodel.eval()
 
+import numpy as np # Ensure numpy is imported
+
 def showimage(image):
-    # If it's a PyTorch tensor, convert to numpy
+    # CASE 1: Raw Environment Observation (Numpy)
+    # Shape is already (H, W, C) -> (28, 28, 3). Matplotlib loves this.
+    if isinstance(image, np.ndarray):
+        # If it's 3D and channels are last, just show it
+        if image.ndim == 3 and image.shape[2] == 3:
+            plt.imshow(image)
+            plt.show()
+            return
+    
+    # CASE 2: Model Output (PyTorch Tensor)
+    # Shape is (Batch, C, H, W) or (C, H, W). Matplotlib hates this.
     if hasattr(image, "detach"):
         image = image.detach().cpu().numpy()
 
-    # Remove batch dimension: (1, 3, 28, 28) -> (3, 28, 28)
-    if image.shape[0] == 1:
+    # Remove batch dimension if present: (1, 3, 28, 28) -> (3, 28, 28)
+    if image.ndim == 4:
         image = image[0]
 
     # Rearrange channels: (3, 28, 28) -> (28, 28, 3)
-    image = image.transpose(1, 2, 0)
+    if image.shape[0] == 3:
+        image = image.transpose(1, 2, 0)
+
+    # Normalize if the model output is not in 0-1 range (optional safety)
+    if image.max() > 1.0:
+        image = image / 255.0
 
     plt.imshow(image)
     plt.show()
-
 
 def play():
 
@@ -76,6 +92,8 @@ def play():
                     o_embed=obs_embed
                 )
 
+                showimage(obs_next_raw['image'])
+                # print(obs_next_raw['image'].shape)
                 # showimage(o_recon)
 
                 playenv.render()

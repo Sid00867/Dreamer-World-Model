@@ -11,10 +11,10 @@ class rssm(nn.Module):
         super().__init__()
 
         self.obs_encoder = nn.Sequential(
-            nn.Conv2d(3, 32, 4, 2, 1),
+            nn.Conv2d(3, 32, 4, 2, 1),    
             nn.BatchNorm2d(32),
             nn.ReLU(),
-            nn.Conv2d(32, 64, 4, 2, 1),
+            nn.Conv2d(32, 64, 4, 2, 1),   
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.Conv2d(64, 128, 4, 2, 1),
@@ -23,12 +23,13 @@ class rssm(nn.Module):
             nn.Conv2d(128, 128, 3, 1, 1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-            
-            nn.AdaptiveAvgPool2d((1,1)), 
             nn.Flatten(),
         )
 
-        self.embed_dim = 128 
+        # For 28x28, this will be 128 * 3 * 3 = 1152
+        with torch.no_grad():
+            dummy = torch.zeros(1, *obs_shape)
+            self.embed_dim = self.obs_encoder(dummy).shape[1]
 
         # Posterior heads
         concat_dim = self.embed_dim + deterministic_dim
@@ -38,16 +39,17 @@ class rssm(nn.Module):
         # gru
         self.gru = nn.GRUCell(latent_dim + action_dim, deterministic_dim)
 
-        # decoder
+        #decoder
         self.fc = nn.Sequential(
             nn.Linear(latent_dim + deterministic_dim, 128 * 3 * 3),
             nn.Dropout(0.3)
         )
 
         self.decoder = nn.Sequential(
+            # Input: 128 x 3 x 3
             nn.ConvTranspose2d(128,128,3,1,1), nn.ReLU(),       
             nn.ConvTranspose2d(128,64,4,2,1, output_padding=1), nn.ReLU(), 
-            nn.ConvTranspose2d(64,32,4,2,1),   nn.ReLU(),      
+            nn.ConvTranspose2d(64,32,4,2,1),   nn.ReLU(),       
             nn.ConvTranspose2d(32,3,4,2,1),                     
             nn.Sigmoid()
         )
@@ -94,7 +96,7 @@ class rssm(nn.Module):
         # decoder
         dec_input = torch.cat([s_t_post, h_t], dim=-1)       
         x = self.fc(dec_input)                               
-        x = x.view(-1, 128, 3, 3)                            
+        x = x.view(-1, 128, 3, 3)                         
         o_recon = self.decoder(x)                          
 
         # reward
