@@ -112,4 +112,4 @@ def play(random_exp):
 
 
 if __name__ == "__main__":
-    play(True)
+    play(False)

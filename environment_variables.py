@@ -9,6 +9,7 @@ latent_dim = 64
 deterministic_dim = 200
 action_dim = 3 
 
+# Ensure this matches your TILE_SIZE setting (4 -> 28, 8 -> 56)
 obs_shape = (3, 28, 28)
 observation_dim = 28 * 28 * 3
 
@@ -17,71 +18,71 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 weights_path = "rssm_latest.pth"
 
 # ======================================================
-# TRAINING (CPU OPTIMIZED)
+# TRAINING (ROBUST GENERALIZATION)
 # ======================================================
 
-learnrate = 1e-3            # Higher LR for faster (rougher) convergence
+learnrate = 1e-3            
 log_sigma_clamp = 5
-beta = 1e-5
-grad_clipping_value = 10.0
+beta = 1e-5                 # Low KL penalty to prioritize sharp reconstruction of new maps
+grad_clipping_value = 100.0 # Allow strong gradients to learn physics quickly
 
 # ======================================================
-# PLANNING (CPU LIGHTWEIGHT)
+# PLANNING (DENSE SEARCH)
 # ======================================================
 
-planning_horizon = 20       # Reduced from 20: fast short-term planning
-optimization_iters = 20      # Reduced from 15: "good enough" planning
-candidates = 2000            # Reduced from 500: less compute per step
-K = 100                      # Reduced from 50: fit to top 10%
-
-# planning_horizon = 20       # Reduced from 20: fast short-term planning
-# optimization_iters = 10      # Reduced from 15: "good enough" planning
-# candidates = 500            # Reduced from 500: less compute per step
-# K = 50                      # Reduced from 50: fit to top 10%
+# Horizon of 15 is enough to see "around the corner" in 10x10
+planning_horizon = 15       
+optimization_iters = 12     # Slightly more thinking time for complex maps
+candidates = 1000           # Dense sampling is critical for random obstacles
+K = 100                     
 
 # ======================================================
-# MODEL FITTING (CPU LIGHTWEIGHT)
+# MODEL FITTING (HEAVY DUTY)
 # ======================================================
 
-C = 150                       # Reduced from 20: Train less, act more
-batch_size = 64              # Reduced from 16: Fits in CPU cache better
-seq_len = 8                # Reduced from 25: Faster backprop
+# Train MORE per cycle because every episode is "new" info
+C = 200                       
+batch_size = 64              
+seq_len = 12                # Longer memory to handle navigation/backtracking
 
 # ======================================================
-# EXPLORATION
+# EXPLORATION (AGGRESSIVE)
 # ======================================================
 
-total_env_steps = 200      # Short data collection cycles
-exploration_noise = 0.15    # Higher noise to find goals quickly
+total_env_steps = 200       
+exploration_noise = 0.35    # High noise prevents getting stuck in random corners
 action_repeat = 2
 
 # ======================================================
-# REPLAY BUFFER
+# REPLAY BUFFER (LONG TERM)
 # ======================================================
 
-replay_buffer_capacity = 5000   
-max_episode_len = 200        # Short episodes (if not solved in 50, fail)
-seed_replay_buffer_episodes = 20 # Quick start
+replay_buffer_capacity = 10000  # Store more history of different maps 
+max_episode_len = 200       
+seed_replay_buffer_episodes = 20 
 
 # ======================================================
-# METRICS (EARLY STOPPING)
+# METRICS & STOPPING
 # ======================================================
 
 metrics_storage_window = 1000
 small_metric_window = 200
 
-loss_eps = 1e-4
-recon_eps = 1e-4
-psnr_eps = 0.05
-min_success = 0.20          # Stop if we hit 20% success (proof of learning)
-min_steps = 250            # Minimum interactions
-max_steps = 10000            # Hard stop after ~5-10 mins
+loss_eps = 1e-5             # Tighter convergence needed
+recon_eps = 1e-5
+psnr_eps = 0.01
+min_success = 0.85          # Expect slightly lower success on truly random hard maps
+min_steps = 5000            
+max_steps = 100000          # 10x longer training for generalization
 
+# ======================================================
+# SAVE FREQUENCY (SAFE)
 # ======================================================
 raw_freq = int(max_steps / total_env_steps / 10)
 weight_save_freq_for_outer_iters = max(1, raw_freq)
+
 # ======================================================
-# TRAIN ENV
+# TRAIN ENV (RANDOMIZED)
 # ======================================================
 
 env = RLReadyEnv(
@@ -93,11 +94,11 @@ env = RLReadyEnv(
     agent_start_pos=(1, 1),
     agent_start_dir=0,
     max_steps=None,
-    seed=82,
+    # seed=82, <--- REMOVED FIXED SEED to allow random generation
 )
 
 # ======================================================
-# PLAY ENV
+# PLAY ENV (RANDOMIZED TEST)
 # ======================================================
 
 def make_play_env():
@@ -110,5 +111,5 @@ def make_play_env():
         agent_start_pos=(1,1),
         agent_start_dir=0,
         max_steps=None,
-        seed=33,
+        seed=33, # Keep fixed seed for playtest CONSISTENCY only
     )
