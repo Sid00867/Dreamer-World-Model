@@ -78,6 +78,9 @@ min_steps = 250            # Minimum interactions
 max_steps = 10000            # Hard stop after ~5-10 mins
 
 # ======================================================
+raw_freq = int(max_steps / total_env_steps / 10)
+weight_save_freq_for_outer_iters = max(1, raw_freq)
+# ======================================================
 # TRAIN ENV
 # ======================================================
 
