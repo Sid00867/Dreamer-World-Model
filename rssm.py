@@ -3,6 +3,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.jit
 from environment_variables import *
 
 class rssm(nn.Module):
@@ -101,6 +102,30 @@ class rssm(nn.Module):
         reward_pred = self.reward_model(reward_input).squeeze(-1)
 
         return (mu_post, log_sigma_post), (mu_prior, log_sigma_prior), o_recon, reward_pred, h_t, s_t_post
+    
+    @torch.jit.export
+    def rollout_horizon(self, h, s, actions):
+        """
+        Fast loop for planning
+        """
+        rewards = torch.zeros(actions.size(0), device=h.device)
+        
+        for t in range(actions.size(1)):
+            act = actions[:, t]
+            
+            gru_input = torch.cat([s, act], dim=-1)
+            h = self.gru(gru_input, h)
+            
+            prior_hidden = self.prior_fc(h)
+            mu_prior = self.prior_mu(prior_hidden)
+            s = mu_prior 
+
+            reward_input = torch.cat([s, h], dim=-1)
+            r = self.reward_model(reward_input).squeeze(-1)
+            
+            rewards += r
+            
+        return rewards
     
     
     def imagine_step(self, h, s, a, sample=False):

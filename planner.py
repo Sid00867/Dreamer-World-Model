@@ -11,7 +11,6 @@ def plan(h_t, s_t):
     with torch.no_grad():
         
         if previous_mean is not None:
-            # Shift mean left by 1: [t+1, t+2, ...]
             new_mean = torch.cat([
                 previous_mean[1:], 
                 torch.zeros((1, action_dim), device=DEVICE)
@@ -26,29 +25,26 @@ def plan(h_t, s_t):
         s_init = s_t.expand(candidates, -1).contiguous()  
 
         for _ in range(optimization_iters):
-            candidates_actions = torch.normal(
+            candidates_actions_logits = torch.normal(
                 mean.expand(candidates, -1, -1), 
                 std.expand(candidates, -1, -1)
             ) 
+            
+            candidates_actions_prob = torch.softmax(candidates_actions_logits, dim=-1)
 
-            h = h_init
-            s = s_init
-            rewards = torch.zeros(candidates, device=DEVICE)
-
-            for t in range(planning_horizon):
-                softmax_actions = torch.softmax(candidates_actions[:, t, :], dim=1) 
-                
-                h, s = rssmmodel.imagine_step(h, s, softmax_actions) 
-                r_t = rssmmodel.reward(s, h)      
-                rewards += r_t
+            #JIT Rollout
+            rewards = rssmmodel.rollout_horizon(h_init, s_init, candidates_actions_prob)
 
             top_values, top_idx = torch.topk(rewards, K, dim=0)
-            top_actions = candidates_actions[top_idx]    
+            
+            # refit based on the distribution parameters,
+            # not the softmaxed probabs, to keep the Gaussian sampling valid.
+            top_actions = candidates_actions_logits[top_idx]    
 
-            # Refit
+            # refit
             mean = top_actions.mean(dim=0)                
             std  = top_actions.std(dim=0) + 1e-5   
-            
+
         previous_mean = mean          
 
         softmax_best_action = torch.softmax(mean[0], dim=-1)       
