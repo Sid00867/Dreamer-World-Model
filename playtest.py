@@ -78,7 +78,7 @@ def play():
                 showimage(o_recon)
 
                 playenv.render()
-                time.sleep(STEP_DELAY)
+                # time.sleep(STEP_DELAY)
 
                 obs = obs_next
                 step += 1

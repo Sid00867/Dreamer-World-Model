@@ -3,13 +3,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
-from PIL import Image
-import seaborn as sns
-
 from environment_variables import *
-
 
 class rssm(nn.Module):
     def __init__(self):
@@ -19,24 +13,21 @@ class rssm(nn.Module):
             nn.Conv2d(3, 32, 4, 2, 1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
-
             nn.Conv2d(32, 64, 4, 2, 1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-
             nn.Conv2d(64, 128, 4, 2, 1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-
             nn.Conv2d(128, 128, 3, 1, 1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-
+            
+            nn.AdaptiveAvgPool2d((1,1)), 
             nn.Flatten(),
         )
 
-        # Flat: 128 * 3 * 3 = 1152
-        self.embed_dim = 1152
+        self.embed_dim = 128 
 
         # Posterior heads
         concat_dim = self.embed_dim + deterministic_dim
@@ -54,9 +45,9 @@ class rssm(nn.Module):
 
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(128,128,3,1,1), nn.ReLU(),       
-            nn.ConvTranspose2d(128,64,4,2,1, output_padding=1), nn.ReLU(), # 3->7
-            nn.ConvTranspose2d(64,32,4,2,1),   nn.ReLU(),      # 7->14
-            nn.ConvTranspose2d(32,3,4,2,1),                    # 14->28
+            nn.ConvTranspose2d(128,64,4,2,1, output_padding=1), nn.ReLU(), 
+            nn.ConvTranspose2d(64,32,4,2,1),   nn.ReLU(),      
+            nn.ConvTranspose2d(32,3,4,2,1),                     
             nn.Sigmoid()
         )
 
@@ -83,39 +74,36 @@ class rssm(nn.Module):
 
 
     def forward_train(self, h_prev, s_prev, a_prev, o_embed):
-
-
         # gru
         gru_input = torch.cat([s_prev, a_prev], dim=-1)   
         h_t = self.gru(gru_input, h_prev)                    
 
-        # Posterior 
+        # posterior
         concat_post = torch.cat([o_embed, h_t], dim=-1)  
         mu_post = self.mu(concat_post)                      
         log_sigma_post = self.log_sigma(concat_post)        
         sigma_post = torch.exp(log_sigma_post)
         s_t_post = mu_post + sigma_post * torch.randn_like(sigma_post)  
 
-        # Prior
+        # prior
         prior_hidden = self.prior_fc(h_t)                    
         mu_prior = self.prior_mu(prior_hidden)               
         log_sigma_prior = self.prior_log_sigma(prior_hidden) 
 
-        # Decoder
+        # decoder
         dec_input = torch.cat([s_t_post, h_t], dim=-1)       
         x = self.fc(dec_input)                               
         x = x.view(-1, 128, 3, 3)                            
         o_recon = self.decoder(x)                          
 
-        # Reward
+        # reward
         reward_input = torch.cat([s_t_post, h_t], dim=-1)   
-        reward_pred = self.reward_model(reward_input).squeeze(-1)  
+        reward_pred = self.reward_model(reward_input).squeeze(-1)
 
         return (mu_post, log_sigma_post), (mu_prior, log_sigma_prior), o_recon, reward_pred, h_t, s_t_post
     
     
     def imagine_step(self, h, s, a, sample=False):
-        # This matches the logic of step 1 in forward_train
         gru_input = torch.cat([s, a], dim=-1)    
         h_next = self.gru(gru_input, h)          
 

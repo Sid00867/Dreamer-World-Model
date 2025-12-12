@@ -98,8 +98,8 @@ from gridworldenv import RLReadyEnv
 # ARCHITECTURE (leave unchanged)
 # ======================================================
 
-latent_dim = 32
-deterministic_dim = 100
+latent_dim = 64
+deterministic_dim = 200
 action_dim = 3 
 
 obs_shape = (3, 28, 28)
@@ -115,7 +115,7 @@ weights_path = "rssm_latest.pth"
 
 learnrate = 1e-3            # Higher LR for faster (rougher) convergence
 log_sigma_clamp = 5
-beta = 1e-4
+beta = 1e-5
 grad_clipping_value = 10.0
 
 # ======================================================
