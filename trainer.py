@@ -87,7 +87,7 @@ def convergence_trainer():
                     'rssm': rssmmodel.state_dict(),
                     'actor': actor_net.state_dict(),
                     'critic': critic_net.state_dict()
-                }, weights_path)
+                }, "rssm_final.pth")
 
     print("\n==== TRAINING CONVERGED ====")
     print("Final metrics:")
@@ -105,4 +105,4 @@ if __name__ == "__main__":
                     'rssm': rssmmodel.state_dict(),
                     'actor': actor_net.state_dict(),
                     'critic': critic_net.state_dict()
-                }, weights_path)
+                }, "rssm_final.pth")

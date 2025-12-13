@@ -80,7 +80,7 @@ max_steps = 150000          # 10x longer training for generalization
 # ======================================================
 # SAVE FREQUENCY (SAFE)
 # ======================================================
-raw_freq = int(max_steps / total_env_steps / 10)
+raw_freq = int(max_steps / total_env_steps / 20)
 weight_save_freq_for_outer_iters = max(1, raw_freq)
 
 # ======================================================
