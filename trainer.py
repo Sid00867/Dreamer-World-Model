@@ -116,7 +116,7 @@ def convergence_trainer():
             # TRAIN with GOLDEN SAMPLING
             # 20% of every batch will be drawn from known wins
 
-            if outer_iter % max(max_steps / total_env_steps / 20) == 0:
+            if outer_iter % max(1, int(max_steps / total_env_steps / 20)) == 0:
                 seed_smart_wins(num_episodes=5)
 
             train_sequence(
