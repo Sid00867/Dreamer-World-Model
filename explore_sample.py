@@ -28,7 +28,6 @@ def run_data_collection(buffer, pbar):
         obs_raw, _ = env.reset()
         obs = preprocess_obs(obs_raw)
 
-        # Fix: Ensure dummy action is (1, action_dim)
         dummy_action = torch.zeros(1, action_dim, device=DEVICE)
         obs_embed = rssmmodel.obs_encoder(obs.unsqueeze(0))
 
@@ -46,7 +45,7 @@ def run_data_collection(buffer, pbar):
 
         while env_steps < total_env_steps:
 
-            # Plan returns (1, action_dim)
+            # Plan
             a_onehot = plan(h, s)              
 
             # Exploration Noise
@@ -56,39 +55,38 @@ def run_data_collection(buffer, pbar):
 
             action = a_onehot.argmax(-1).item()
 
-            reward_sum = 0
-            obs_next_raw = None
-
+            # --- ACTION STEP ---
+            # No inner loop needed since repeat is 1
             obs_next_raw, r, terminated, truncated, info, reached_goal = env.step(action)
-            reward_sum += r
+            
             env_steps += 1
             pbar.update(1)
             episode_len += 1
+            cumulative_return += r
 
             done = terminated or truncated
-            if reached_goal or done or env_steps >= total_env_steps:
-                break
 
-            cumulative_return += reward_sum    
-
+            # --- BUG FIX: DO NOT BREAK HERE ON DONE ---
+            # Only break if we hit the TOTAL step limit for this cycle
+            if env_steps >= total_env_steps:
+                # We still need to store this last step before breaking!
+                pass 
+            
             obs_next = preprocess_obs(obs_next_raw)
             obs_input = obs_next.unsqueeze(0) 
             obs_embed = rssmmodel.obs_encoder(obs_input)
 
-            # a_onehot is already (1, 3). 
-            # forward_train expects (Batch, Dim). 
-            # We pass it directly. NO unsqueeze needed if it's already 2D.
             (mu_post, _), _, _, _, h, s = rssmmodel.forward_train(
                 h_prev=h, 
                 s_prev=s, 
-                a_prev=a_onehot, # Pass directly as (1, 3)
+                a_prev=a_onehot, 
                 o_embed=obs_embed
             )
 
             buffer.add_step(
                 obs.cpu(),
-                a_onehot.cpu(), # Store as (1, 3) or squeeze if buffer expects flat
-                reward_sum,
+                a_onehot.cpu(), 
+                r,
                 done
             )
 
@@ -102,6 +100,7 @@ def run_data_collection(buffer, pbar):
 
             obs = obs_next
 
+            # Reset Logic
             if done:
                 cumulative_return = 0.0
                 reset_planner()

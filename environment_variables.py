@@ -45,7 +45,7 @@ actor_entropy_scale = 1e-3
 # ======================================================
 
 # Train MORE per cycle because every episode is "new" info
-C = 200                       
+C = 125                       
 batch_size = 64              
 seq_len = 8                # Longer memory to handle navigation/backtracking
 
