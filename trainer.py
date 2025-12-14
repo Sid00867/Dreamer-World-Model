@@ -17,9 +17,9 @@ def bfs_solve(env):
     navigating around walls.
     Actions: 0=Left, 1=Right, 2=Forward
     """
-    grid = env.unwrapped.grid
-    start_pos = env.unwrapped.agent_pos
-    start_dir = env.unwrapped.agent_dir # 0=East, 1=South, 2=West, 3=North
+    grid = env.env.unwrapped.grid
+    start_pos = env.env.unwrapped.agent_pos
+    start_dir = env.env.unwrapped.agent_dir # 0=East, 1=South, 2=West, 3=North
     goal_pos = env.goal_pos
     
     # Queue: (x, y, dir, path_of_actions)
