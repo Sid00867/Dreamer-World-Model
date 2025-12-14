@@ -38,6 +38,8 @@ imagination_horizon = 20
 gamma = 0.99
 lambda_=0.95 #95 percent trust in reality over dreamt predictions in bellman optimality equatiob
 
+actor_entropy_scale = 1e-3
+
 # ======================================================
 # MODEL FITTING (HEAVY DUTY)
 # ======================================================
@@ -45,7 +47,7 @@ lambda_=0.95 #95 percent trust in reality over dreamt predictions in bellman opt
 # Train MORE per cycle because every episode is "new" info
 C = 200                       
 batch_size = 64              
-seq_len = 12                # Longer memory to handle navigation/backtracking
+seq_len = 8                # Longer memory to handle navigation/backtracking
 
 # ======================================================
 # EXPLORATION (AGGRESSIVE)
@@ -59,7 +61,7 @@ action_repeat = 2
 # REPLAY BUFFER (LONG TERM)
 # ======================================================
 
-replay_buffer_capacity = 10000  # Store more history of different maps 
+replay_buffer_capacity = 20000  # Store more history of different maps 
 max_episode_len = 200       
 seed_replay_buffer_episodes = 20 
 
@@ -75,7 +77,7 @@ recon_eps = 1e-5
 psnr_eps = 0.01
 min_success = 0.85          # Expect slightly lower success on truly random hard maps
 min_steps = 5000            
-max_steps = 150000          # 10x longer training for generalization
+max_steps = 100000          # 10x longer training for generalization
 
 # ======================================================
 # SAVE FREQUENCY (SAFE)

@@ -369,7 +369,7 @@ class RLReadyEnv:
         # Remove termination penalty if not success
         elif term:
             reward = 0.0  # No penalty
-        
+
         total_reward = reward + shaped_reward
         # print(f"dist:{dist}, sparse:{reward}, shaped:{shaped_reward}, total:{total_reward}")
         

@@ -1,5 +1,6 @@
 import torch
 import random
+import numpy as np
 
 class ReplayBuffer:
     def __init__(
@@ -11,7 +12,6 @@ class ReplayBuffer:
         device= "cuda" if torch.cuda.is_available() else "cpu"
     ):
         self.device = device
-
         self.capacity = capacity_episodes
         self.max_episode_len = max_episode_len
         self.obs_shape = obs_shape
@@ -20,42 +20,21 @@ class ReplayBuffer:
         self.ptr = 0
         self.size = 0
 
-        # Storage tensors
-        self.obs = torch.zeros(
-            (capacity_episodes, max_episode_len, *obs_shape),
-            dtype=torch.float32
-        )
+        # Storage
+        self.obs = torch.zeros((capacity_episodes, max_episode_len, *obs_shape), dtype=torch.float32)
+        self.actions = torch.zeros((capacity_episodes, max_episode_len, action_dim), dtype=torch.float32)
+        self.rewards = torch.zeros((capacity_episodes, max_episode_len, 1), dtype=torch.float32)
+        self.dones = torch.zeros((capacity_episodes, max_episode_len, 1), dtype=torch.bool)
+        self.lengths = torch.zeros(capacity_episodes, dtype=torch.int32)
 
-        self.actions = torch.zeros(
-            (capacity_episodes, max_episode_len, action_dim),
-            dtype=torch.float32
-        )
-
-        self.rewards = torch.zeros(
-            (capacity_episodes, max_episode_len, 1),
-            dtype=torch.float32
-        )
-
-        self.dones = torch.zeros(
-            (capacity_episodes, max_episode_len, 1),
-            dtype=torch.bool
-        )
-
-        # Store actual episode lengths
-        self.lengths = torch.zeros(
-            capacity_episodes,
-            dtype=torch.int32
-        )
-
-        # Active episode builder
+        # Episode Construction
         self._cur_ep_len = 0
+        self._cur_ep_reward = 0.0 # Track total reward to detect wins
 
+        # --- GOLDEN SAMPLING ---
+        self.winning_episodes = set() # Store indices of successful episodes
 
     def add_step(self, obs, action, reward, done):
-        """
-        Add single environment step to current episode.
-        When 'done' is True, episode is finalized automatically.
-        """
         ep = self.ptr
         t = self._cur_ep_len
 
@@ -70,89 +49,84 @@ class ReplayBuffer:
         self.dones[ep, t] = bool(done)
 
         self._cur_ep_len += 1
+        self._cur_ep_reward += float(reward)
 
         if done:
             self._finalize_episode()
 
-    # --------------------------------------------------------
-
     def _finalize_episode(self):
-        """
-        Saves current episode length, advances buffer pointer
-        """
+        # 1. Check if we are overwriting an old winner
+        if self.ptr in self.winning_episodes:
+            self.winning_episodes.remove(self.ptr)
+
+        # 2. Check if NEW episode is a winner
+        # Heuristic: If total reward is positive, it's a win (since step penalties are negative)
+        # You can also pass an explicit 'success' flag to add_step if you prefer
+        if self._cur_ep_reward > 0.0: 
+            self.winning_episodes.add(self.ptr)
+
+        # 3. Advance Pointers
         self.lengths[self.ptr] = self._cur_ep_len
         self.ptr = (self.ptr + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
+        
+        # 4. Reset Trackers
         self._cur_ep_len = 0
+        self._cur_ep_reward = 0.0
 
-    # --------------------------------------------------------
-    # SAMPLING
-    # --------------------------------------------------------
-
-    def sample(
-        self,
-        batch_size: int,
-        seq_len: int
-    ):
+    def sample(self, batch_size: int, seq_len: int, golden_ratio: float = 0.2):
         """
-        Sample batch of contiguous sequences.
-
-        Returns:
-            obs      (B,S,C,H,W)
-            actions  (B,S,A)
-            rewards  (B,S,1)
-            dones    (B,S,1)
+        golden_ratio: % of batch that MUST be winning episodes
         """
-
         assert self.size > 0
-        assert seq_len <= self.max_episode_len
+        
+        # Calculate split
+        num_golden = int(batch_size * golden_ratio)
+        num_random = batch_size - num_golden
+        
+        # If we have no wins yet, default to full random
+        if len(self.winning_episodes) == 0:
+            num_golden = 0
+            num_random = batch_size
 
-        batch_obs = []
-        batch_act = []
-        batch_rew = []
-        batch_done = []
+        indices = []
+        
+        # 1. Pick Golden Episodes
+        if num_golden > 0:
+            golden_list = list(self.winning_episodes)
+            for _ in range(num_golden):
+                indices.append(random.choice(golden_list))
+                
+        # 2. Pick Random Episodes
+        for _ in range(num_random):
+            indices.append(random.randint(0, self.size - 1))
+            
+        # 3. Retrieve Data
+        batch_obs, batch_act, batch_rew, batch_done = [], [], [], []
+        
+        for ep in indices:
+            ep_len = self.lengths[ep].item()
+            
+            # Safety: If selected episode is too short (rare), resample random
+            if ep_len < seq_len:
+                while True:
+                    ep = random.randint(0, self.size - 1)
+                    if self.lengths[ep].item() >= seq_len: break
+                    
+            # Random start point in episode
+            start = random.randint(0, self.lengths[ep].item() - seq_len)
+            
+            batch_obs.append(self.obs[ep, start:start+seq_len])
+            batch_act.append(self.actions[ep, start:start+seq_len])
+            batch_rew.append(self.rewards[ep, start:start+seq_len])
+            batch_done.append(self.dones[ep, start:start+seq_len])
 
-        for _ in range(batch_size):
-            valid = False
-
-            # Resample until a valid subsequence is found
-            while not valid:
-
-                ep = random.randint(0, self.size - 1)
-
-                ep_len = self.lengths[ep].item()
-
-                if ep_len < seq_len:
-                    continue
-
-                start = random.randint(0, ep_len - seq_len)
-
-                # Don't sample sequences crossing termination
-                done_flags = self.dones[ep, start:start + seq_len]
-                if done_flags[:-1].any():
-                    continue
-
-                valid = True
-
-            batch_obs.append(
-                self.obs[ep, start:start + seq_len]
-            )
-            batch_act.append(
-                self.actions[ep, start:start + seq_len]
-            )
-            batch_rew.append(
-                self.rewards[ep, start:start + seq_len]
-            )
-            batch_done.append(
-                self.dones[ep, start:start + seq_len]
-            )
-
-        obs = torch.stack(batch_obs).to(self.device)
-        acts = torch.stack(batch_act).to(self.device)
-        rews = torch.stack(batch_rew).to(self.device)
-        dones = torch.stack(batch_done).to(self.device)
-
-        return obs, acts, rews, dones
+        return (
+            torch.stack(batch_obs).to(self.device),
+            torch.stack(batch_act).to(self.device),
+            torch.stack(batch_rew).to(self.device),
+            torch.stack(batch_done).to(self.device)
+        )
 
     # --------------------------------------------------------
     # UTILITIES

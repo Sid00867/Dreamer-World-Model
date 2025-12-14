@@ -84,10 +84,19 @@ def train_actor_critic(start_h, start_s):
     
     lambda_targets = calculate_lambda_returns(imagined_rewards, imagined_values)
     
-    # actor loss (Maximize Lambda Return)
+
+    #CALCULATE ENTROPY
+    current_logits = actor_net(target_input).view(seq_len, batch, -1)
+    current_dist = torch.distributions.OneHotCategorical(logits=current_logits)
+    entropy = current_dist.entropy() # Shape: (Seq, Batch)
+    
     # We want the actor to pick actions that lead to high Lambda Returns.
     # Since optimizers minimize, we take the negative mean.
-    # Note: We ignore the very last step since we can't bootstrap it fully
+    # Actor Loss = Minimize Negative Value - Entropy Bonus
+    actor_loss = -torch.mean(lambda_targets[:-1]) - (actor_entropy_scale * torch.mean(entropy[:-1]))
+
+    # actor loss (Maximize Lambda Return)
+
     actor_loss = -torch.mean(lambda_targets[:-1])
     
     # critic loss (Predict Lambda Return) 
@@ -122,7 +131,7 @@ def train_sequence(C, dataset, batch_size, seq_len):
 
     for step in range(C):
         
-        o_t, a_t, r_t, _ = dataset.sample(batch_size, seq_len)
+        o_t, a_t, r_t, _ = dataset.sample(batch_size, seq_len, golden_ratio=0.25)
         B = o_t.size(0)
 
         # Encode Observations

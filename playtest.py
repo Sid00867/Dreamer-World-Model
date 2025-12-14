@@ -70,6 +70,12 @@ def play(random_exp):
 
             with torch.no_grad():
 
+                state_features = torch.cat([s, h], dim=-1)
+                logits = actor_net(state_features)
+                probs = torch.nn.functional.softmax(logits, dim=-1)
+                
+                print(f"Action Probs: {probs[0].cpu().numpy().round(2)}")
+
                 a_onehot = plan(h, s) 
 
                 if a_onehot.dim() == 1:
@@ -85,7 +91,7 @@ def play(random_exp):
 
                 obs_next_raw, reward, terminated, truncated, info, _ = playenv.step(action)
 
-                print(f"Step: {step}, Action: {action}, Reward: {reward:.3f}")
+                # print(f"Step: {step}, Action: {action}, Reward: {reward:.3f}")
 
                 done = terminated or truncated
 
