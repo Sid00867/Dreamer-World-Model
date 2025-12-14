@@ -47,7 +47,7 @@ actor_entropy_scale = 1e-3
 # Train MORE per cycle because every episode is "new" info
 C = 75                      
 batch_size = 64              
-seq_len = 16                # Longer memory to handle navigation/backtracking
+seq_len = 8                # Longer memory to handle navigation/backtracking
 
 # ======================================================
 # EXPLORATION (AGGRESSIVE)
@@ -61,7 +61,7 @@ exploration_noise = 0.15    # High noise prevents getting stuck in random corner
 # ======================================================
 
 replay_buffer_capacity = 12000  # Store more history of different maps 
-max_episode_len = 200       
+max_episode_len = 125       
 seed_replay_buffer_episodes = 20 
 
 # ======================================================
