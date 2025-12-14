@@ -55,7 +55,6 @@ seq_len = 8                # Longer memory to handle navigation/backtracking
 
 total_env_steps = 500 #SHOULD NOT GO BELOW 400       
 exploration_noise = 0.15    # High noise prevents getting stuck in random corners
-action_repeat = 2
 
 # ======================================================
 # REPLAY BUFFER (LONG TERM)

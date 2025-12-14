@@ -59,16 +59,15 @@ def run_data_collection(buffer, pbar):
             reward_sum = 0
             obs_next_raw = None
 
-            for _ in range(action_repeat):
-                obs_next_raw, r, terminated, truncated, info, reached_goal = env.step(action)
-                reward_sum += r
-                env_steps += 1
-                pbar.update(1)
-                episode_len += 1
+            obs_next_raw, r, terminated, truncated, info, reached_goal = env.step(action)
+            reward_sum += r
+            env_steps += 1
+            pbar.update(1)
+            episode_len += 1
 
-                done = terminated or truncated
-                if reached_goal or done or env_steps >= total_env_steps:
-                    break
+            done = terminated or truncated
+            if reached_goal or done or env_steps >= total_env_steps:
+                break
 
             cumulative_return += reward_sum    
 
@@ -97,7 +96,7 @@ def run_data_collection(buffer, pbar):
                 reward=cumulative_return,
                 episode_len=episode_len,
                 done=done,
-                action_repeat=action_repeat,
+                action_repeat=1,
                 success=reached_goal
             )
 
