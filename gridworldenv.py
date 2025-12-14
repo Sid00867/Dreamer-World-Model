@@ -370,7 +370,8 @@ class RLReadyEnv:
         elif term:
             reward = 0.0  # No penalty
 
-        total_reward = reward + shaped_reward
+        # total_reward = reward + shaped_reward
+        total_reward = reward
         # print(f"dist:{dist}, sparse:{reward}, shaped:{shaped_reward}, total:{total_reward}")
         
         return obs, total_reward, term, trunc, info, reached_goal

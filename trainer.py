@@ -115,6 +115,10 @@ def convergence_trainer():
 
             # TRAIN with GOLDEN SAMPLING
             # 20% of every batch will be drawn from known wins
+
+            if outer_iter % max(max_steps / total_env_steps / 20) == 0:
+                seed_smart_wins(num_episodes=5)
+
             train_sequence(
                 C=C,
                 dataset=buffer, # Pass the buffer instance
@@ -132,7 +136,7 @@ def convergence_trainer():
                 "Ret": f"{stats['return']:.1f}", 
                 "Succ": f"{100*stats['success_rate']:.0f}%",
             })
-            
+
             # Hardcoded save path as requested
             if outer_iter % weight_save_freq_for_outer_iters == 0:
                 torch.save({

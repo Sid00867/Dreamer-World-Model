@@ -61,22 +61,22 @@ exploration_noise = 0.15    # High noise prevents getting stuck in random corner
 # ======================================================
 
 replay_buffer_capacity = 12000  # Store more history of different maps 
-max_episode_len = 125       
+max_episode_len = 150       
 seed_replay_buffer_episodes = 20 
 
 # ======================================================
 # METRICS & STOPPING
 # ======================================================
 
-metrics_storage_window = 1000
-small_metric_window = 200
+metrics_storage_window = 8000
+small_metric_window = 500
 
 loss_eps = 1e-5             # Tighter convergence needed
 recon_eps = 1e-5
 psnr_eps = 0.01
 min_success = 0.85          # Expect slightly lower success on truly random hard maps
 min_steps = 5000            
-max_steps = 200000          # 10x longer training for generalization
+max_steps = 350000          # 10x longer training for generalization
 
 # ======================================================
 # SAVE FREQUENCY (SAFE)
