@@ -73,36 +73,28 @@ def seed_smart_wins(num_episodes=20):
     
     while wins < num_episodes:
         reset_planner()
-        obs_raw, _ = env.reset() # Random map
+        obs_raw, _ = env.reset() 
         obs = preprocess_obs(obs_raw)
         
-        # 1. Solve the map using BFS Oracle
+        # 1. Solve
         solution_actions = bfs_solve(env)
         
-        if len(solution_actions) == 0:
-            continue # Skip unsolvable or too hard maps
+        # CRITICAL FIX: Skip if path is too short for our sequence length
+        if len(solution_actions) < seq_len:
+            continue 
             
-        # 2. Execute the perfect path
+        # 2. Execute
         done = False
         for action in solution_actions:
-            
-            # Convert to OneHot for Buffer
             a_onehot = F.one_hot(torch.tensor(action), action_dim).float().to(DEVICE)
-            
             obs_next_raw, r, terminated, truncated, info, reached_goal = env.step(action)
             done = terminated or truncated or reached_goal
             
-            buffer.add_step(
-                obs.cpu(),
-                a_onehot.cpu(),
-                r,
-                done
-            )
-            
+            buffer.add_step(obs.cpu(), a_onehot.cpu(), r, done)
             obs = preprocess_obs(obs_next_raw)
             if done: break
             
-        if done and r > 0: # Verify it was a win
+        if done and r > 0: 
             wins += 1
             print(f"  -> Seeded Win #{wins} (Length: {len(solution_actions)})")
 
@@ -159,3 +151,11 @@ if __name__ == "__main__":
         'actor': actor_net.state_dict(),
         'critic': critic_net.state_dict()
     }, "rssm_final.pth")
+
+    print("Saving metrics to training_log.txt...")
+    final_stats = METRICS.get_means()
+    with open("training_log.txt", "w") as f:
+        f.write("=== FINAL TRAINING METRICS ===\n")
+        for key, value in final_stats.items():
+            f.write(f"{key}: {value}\n")
+    print("Done.")

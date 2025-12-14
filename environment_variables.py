@@ -45,22 +45,22 @@ actor_entropy_scale = 1e-3
 # ======================================================
 
 # Train MORE per cycle because every episode is "new" info
-C = 125                       
+C = 75                      
 batch_size = 64              
-seq_len = 8                # Longer memory to handle navigation/backtracking
+seq_len = 16                # Longer memory to handle navigation/backtracking
 
 # ======================================================
 # EXPLORATION (AGGRESSIVE)
 # ======================================================
 
-total_env_steps = 500 #SHOULD NOT GO BELOW 400       
+total_env_steps = 1000  #SHOULD NOT GO BELOW 400       
 exploration_noise = 0.15    # High noise prevents getting stuck in random corners
 
 # ======================================================
 # REPLAY BUFFER (LONG TERM)
 # ======================================================
 
-replay_buffer_capacity = 18000  # Store more history of different maps 
+replay_buffer_capacity = 12000  # Store more history of different maps 
 max_episode_len = 200       
 seed_replay_buffer_episodes = 20 
 
@@ -76,7 +76,7 @@ recon_eps = 1e-5
 psnr_eps = 0.01
 min_success = 0.85          # Expect slightly lower success on truly random hard maps
 min_steps = 5000            
-max_steps = 100000          # 10x longer training for generalization
+max_steps = 200000          # 10x longer training for generalization
 
 # ======================================================
 # SAVE FREQUENCY (SAFE)
