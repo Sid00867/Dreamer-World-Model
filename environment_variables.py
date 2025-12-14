@@ -61,7 +61,7 @@ action_repeat = 2
 # REPLAY BUFFER (LONG TERM)
 # ======================================================
 
-replay_buffer_capacity = 20000  # Store more history of different maps 
+replay_buffer_capacity = 18000  # Store more history of different maps 
 max_episode_len = 200       
 seed_replay_buffer_episodes = 20 
 
