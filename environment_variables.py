@@ -76,7 +76,7 @@ recon_eps = 1e-5
 psnr_eps = 0.01
 min_success = 0.85          # Expect slightly lower success on truly random hard maps
 min_steps = 5000            
-max_steps = 350000          # 10x longer training for generalization
+max_steps = 120000          # 10x longer training for generalization
 
 # ======================================================
 # SAVE FREQUENCY (SAFE)

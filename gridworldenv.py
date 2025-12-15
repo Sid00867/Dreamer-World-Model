@@ -368,7 +368,7 @@ class RLReadyEnv:
             reached_goal = True
         # Remove termination penalty if not success
         elif term:
-            reward = 0.0  # No penalty
+            reward = -1.0  # No penalty
 
         # total_reward = reward + shaped_reward
         total_reward = reward
