@@ -74,7 +74,7 @@ def play(random_exp):
                 logits = actor_net(state_features)
                 probs = torch.nn.functional.softmax(logits, dim=-1)
                 
-                print(f"Action Probs: {probs[0].cpu().numpy().round(2)}")
+                print(f"Action Probs: {probs[0].cpu().numpy().round(2)}, step = {step}")
 
                 a_onehot = plan(h, s) 
 
@@ -119,4 +119,4 @@ def play(random_exp):
 
 if __name__ == "__main__":
     # Ensure this is FALSE to test the actual intelligence
-    play(False)
+    play(True)

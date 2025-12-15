@@ -2,107 +2,105 @@ import torch
 from gridworldenv import RLReadyEnv 
 
 # ======================================================
-# ARCHITECTURE (leave unchanged)
+# ARCHITECTURE (DREAMER V2 CONFIG)
 # ======================================================
 
-latent_dim = 64
+# V2 uses a matrix of Categorical variables (32 variables, 32 classes each)
+stoch_size = 32 
+class_size = 32 
+
+# Flattened size for the Linear layers (32 * 32 = 1024)
+latent_dim = stoch_size * class_size 
 deterministic_dim = 200
 action_dim = 3 
 
-# Ensure this matches your TILE_SIZE setting (4 -> 28, 8 -> 56)
+# 28x28 GridWorld
 obs_shape = (3, 28, 28)
 observation_dim = 28 * 28 * 3
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
 weights_path = "rssm_latest.pth"
 
 # ======================================================
-# TRAINING (ROBUST GENERALIZATION)
+# TRAINING
 # ======================================================
 
-learnrate = 1e-3            
-log_sigma_clamp = 5
-beta = 1e-5                 # Low KL penalty to prioritize sharp reconstruction of new maps
-grad_clipping_value = 100.0 # Allow strong gradients to learn physics quickly
+learnrate = 6e-4            
+grad_clipping_value = 100.0 
+
+# KL BALANCING (Crucial for V2)
+# We prioritize training the Prior (prediction) over the Posterior (representation)
+kl_balance = 0.8 
+kl_scale = 0.1    # V2 usually uses a smaller scale like 0.1 or 1.0
 
 # ======================================================
-# PLANNING (DENSE SEARCH)
+# PLANNING
 # ======================================================
 
 actor_lr = 8e-5         
 value_lr = 8e-5
 imagination_horizon = 20
 
-#lambda returns
 gamma = 0.99
-lambda_=0.95 #95 percent trust in reality over dreamt predictions in bellman optimality equatiob
+lambda_ = 0.95 
 
 actor_entropy_scale = 1e-3
 
 # ======================================================
-# MODEL FITTING (HEAVY DUTY)
+# MODEL FITTING
 # ======================================================
 
-# Train MORE per cycle because every episode is "new" info
 C = 75                      
-batch_size = 64              
-seq_len = 8                # Longer memory to handle navigation/backtracking
+batch_size = 50              
+seq_len = 50                
 
 # ======================================================
-# EXPLORATION (AGGRESSIVE)
+# EXPLORATION
 # ======================================================
 
-total_env_steps = 1000  #SHOULD NOT GO BELOW 400       
-exploration_noise = 0.15    # High noise prevents getting stuck in random corners
+total_env_steps = 2000        
+exploration_noise = 0.0     # Not needed, we rely on Actor Entropy
 
 # ======================================================
-# REPLAY BUFFER (LONG TERM)
+# REPLAY BUFFER
 # ======================================================
 
-replay_buffer_capacity = 12000  # Store more history of different maps 
-max_episode_len = 150       
-seed_replay_buffer_episodes = 20 
+replay_buffer_capacity = 10000  
+max_episode_len = 175       
+seed_replay_buffer_episodes = 5 
 
 # ======================================================
 # METRICS & STOPPING
 # ======================================================
 
-metrics_storage_window = 8000
+metrics_storage_window = 2000
 small_metric_window = 500
 
-loss_eps = 1e-5             # Tighter convergence needed
+loss_eps = 1e-5             
 recon_eps = 1e-5
 psnr_eps = 0.01
-min_success = 0.85          # Expect slightly lower success on truly random hard maps
+min_success = 0.90          # Aiming higher now
 min_steps = 5000            
-max_steps = 120000          # 10x longer training for generalization
+max_steps = 4000000          
 
 # ======================================================
-# SAVE FREQUENCY (SAFE)
+# SAVE FREQUENCY
 # ======================================================
-raw_freq = int(max_steps / total_env_steps / 20)
+raw_freq = int(max_steps / total_env_steps / 10)
 weight_save_freq_for_outer_iters = max(1, raw_freq)
 
 # ======================================================
-# TRAIN ENV (RANDOMIZED)
+# ENV CONFIG
 # ======================================================
-
+# (Keeping your SimpleEnv config)
 env = RLReadyEnv(
     env_kind="simple",
     size=10,
     obs_mode="rgb",
     obs_scope="partial",
     render_mode=None,
-    agent_start_pos=(1, 1),
-    agent_start_dir=0,
-    max_steps=None,
-    # seed=82, <--- REMOVED FIXED SEED to allow random generation
+    seed=None 
 )
-
-# ======================================================
-# PLAY ENV (RANDOMIZED TEST)
-# ======================================================
 
 def make_play_env():
     return RLReadyEnv(
@@ -111,8 +109,5 @@ def make_play_env():
         obs_mode="rgb",
         obs_scope="partial",
         render_mode="human",
-        agent_start_pos=(1,1),
-        agent_start_dir=0,
-        max_steps=None,
-        seed=33, # Keep fixed seed for playtest CONSISTENCY only
+        seed=33
     )
