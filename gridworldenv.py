@@ -363,15 +363,13 @@ class RLReadyEnv:
         reached_goal = False
         # OVERRIDE: +1 success when AT goal (ignore 'done' action requirement)
         if goal_pos and agent_pos == goal_pos:
-            reward = 1.0  # Force success
-            term = True   # Ensure termination
-            reached_goal = True
-        # Remove termination penalty if not success
-        elif term:
-            reward = -1.0  # No penalty
-
+            reward = 10.0   # Big spike for success
+            term = True
+            reached_goal = True    
+        # elif agent_pos != goal_pos:
+        #     reward = -0.1   # Small nag to hurry up
         # total_reward = reward + shaped_reward
-        total_reward = reward
+        total_reward = reward + shaped_reward
         # print(f"dist:{dist}, sparse:{reward}, shaped:{shaped_reward}, total:{total_reward}")
         
         return obs, total_reward, term, trunc, info, reached_goal

@@ -1,28 +1,23 @@
-
 import time
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 from environment_variables import *
 from planner import plan, reset_planner
 from explore_sample import preprocess_obs
-
-
 from fitter import rssmmodel, actor_net 
 
-playenv = make_play_env()
+# Only init env if running as main to avoid double-launch
+if __name__ == "__main__":
+    playenv = make_play_env()
+else:
+    playenv = None
 
 MODEL_PATH = weights_path  
 NUM_EPISODES = 5
 STEP_DELAY = 0.05  
-checkpoint = torch.load("rssm_final.pth", map_location=DEVICE)
-
-rssmmodel.load_state_dict(checkpoint['rssm'])
-actor_net.load_state_dict(checkpoint['actor'])
-
-rssmmodel.eval()
-actor_net.eval()
 
 def showimage(image):
     if isinstance(image, np.ndarray):
@@ -44,6 +39,16 @@ def showimage(image):
     plt.show()
 
 def play(random_exp):
+    if os.path.exists("rssm_final.pth"):
+        checkpoint = torch.load("rssm_final.pth", map_location=DEVICE)
+        rssmmodel.load_state_dict(checkpoint['rssm'])
+        actor_net.load_state_dict(checkpoint['actor'])
+        print("Loaded weights from rssm_final.pth")
+    else:
+        print("Warning: rssm_final.pth not found. Playing with random weights.")
+
+    rssmmodel.eval()
+    actor_net.eval()
 
     for ep in range(NUM_EPISODES):
 
@@ -56,6 +61,7 @@ def play(random_exp):
         dummy_action = torch.zeros(1, action_dim, device=DEVICE)
         obs_embed = rssmmodel.obs_encoder(obs.unsqueeze(0))
         
+        # CORRECTED UNPACKING:
         _, _, _, _, h, s = rssmmodel.forward_train(
             h_prev=torch.zeros(1, deterministic_dim, device=DEVICE),
             s_prev=torch.zeros(1, latent_dim, device=DEVICE),
@@ -69,7 +75,6 @@ def play(random_exp):
         while not done:
 
             with torch.no_grad():
-
                 state_features = torch.cat([s, h], dim=-1)
                 logits = actor_net(state_features)
                 probs = torch.nn.functional.softmax(logits, dim=-1)
@@ -81,35 +86,33 @@ def play(random_exp):
                 if a_onehot.dim() == 1:
                     a_onehot = a_onehot.unsqueeze(0)
 
-                action = a_onehot.argmax(-1).item()
-
                 if random_exp:
                     if torch.rand(1) < 0.15: 
                         action = torch.randint(0, action_dim, (1,)).item()
                     else:
                         action = a_onehot.argmax(-1).item()
+                else:
+                    action = a_onehot.argmax(-1).item()
 
                 obs_next_raw, reward, terminated, truncated, info, _ = playenv.step(action)
-
-                # print(f"Step: {step}, Action: {action}, Reward: {reward:.3f}")
-
                 done = terminated or truncated
 
                 obs_next = preprocess_obs(obs_next_raw)
                 obs_embed = rssmmodel.obs_encoder(obs_next.unsqueeze(0))
 
-                (mu_post, _), _, o_recon, _, h, s = rssmmodel.forward_train(
+                # CORRECTED UNPACKING:
+                _, _, o_recon, _, h, s = rssmmodel.forward_train(
                     h_prev=h,
                     s_prev=s,
                     a_prev=a_onehot, 
                     o_embed=obs_embed
                 )
 
-                # showimage(obs_next_raw['image'])
-                # showimage(o_recon)
-
                 playenv.render()
-                # time.sleep(STEP_DELAY)
+                
+                # Uncomment to debug visual reconstruction
+                # if step % 10 == 0:
+                #    showimage(o_recon)
 
                 obs = obs_next
                 step += 1

@@ -52,7 +52,7 @@ actor_entropy_scale = 1e-3
 
 C = 75                      
 batch_size = 50              
-seq_len = 50                
+seq_len = 14                
 
 # ======================================================
 # EXPLORATION
@@ -81,7 +81,7 @@ recon_eps = 1e-5
 psnr_eps = 0.01
 min_success = 0.90          # Aiming higher now
 min_steps = 5000            
-max_steps = 4000000          
+max_steps = 1500000          
 
 # ======================================================
 # SAVE FREQUENCY

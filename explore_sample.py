@@ -32,6 +32,7 @@ def run_data_collection(buffer, pbar):
         obs_embed = rssmmodel.obs_encoder(obs.unsqueeze(0))
 
         # Initial state
+        # CORRECTED UNPACKING:
         _, _, _, _, h, s = rssmmodel.forward_train(
                     h_prev=torch.zeros(1, deterministic_dim, device=DEVICE),
                     s_prev=torch.zeros(1, latent_dim, device=DEVICE),
@@ -56,7 +57,6 @@ def run_data_collection(buffer, pbar):
             action = a_onehot.argmax(-1).item()
 
             # --- ACTION STEP ---
-            # No inner loop needed since repeat is 1
             obs_next_raw, r, terminated, truncated, info, reached_goal = env.step(action)
             
             env_steps += 1
@@ -66,17 +66,17 @@ def run_data_collection(buffer, pbar):
 
             done = terminated or truncated
 
-            # --- BUG FIX: DO NOT BREAK HERE ON DONE ---
-            # Only break if we hit the TOTAL step limit for this cycle
+            # Stop if we hit the limit, but process the last frame first
             if env_steps >= total_env_steps:
-                # We still need to store this last step before breaking!
                 pass 
             
             obs_next = preprocess_obs(obs_next_raw)
             obs_input = obs_next.unsqueeze(0) 
             obs_embed = rssmmodel.obs_encoder(obs_input)
 
-            (mu_post, _), _, _, _, h, s = rssmmodel.forward_train(
+            # CORRECTED UNPACKING:
+            # Replaced "(mu_post, _), ..." with "_, ..."
+            _, _, _, _, h, s = rssmmodel.forward_train(
                 h_prev=h, 
                 s_prev=s, 
                 a_prev=a_onehot, 
@@ -111,6 +111,7 @@ def run_data_collection(buffer, pbar):
                 obs_input = obs.unsqueeze(0)
                 obs_embed = rssmmodel.obs_encoder(obs_input)
                 
+                # CORRECTED UNPACKING:
                 _, _, _, _, h, s = rssmmodel.forward_train(
                     h_prev=torch.zeros(1, deterministic_dim, device=DEVICE),
                     s_prev=torch.zeros(1, latent_dim, device=DEVICE),

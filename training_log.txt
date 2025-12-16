@@ -1,0 +1,14 @@
+=== FINAL TRAINING METRICS ===
+loss_total: 0.09204289610683918
+loss_recon: 0.00704044350842014
+loss_kl: 0.8006749512553215
+loss_reward: 0.004934954946511425
+loss_actor: -62.3060635433197
+loss_critic: 5.281333758294583
+psnr: 0.0
+return: -102.84
+success_rate: 0.0
+episode_length: 400.0
+env_steps: 1502000
+train_steps: 56325
+episodes: 3789
