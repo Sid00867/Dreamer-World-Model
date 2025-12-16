@@ -8,67 +8,46 @@ from replaybuffer import ReplayBuffer
 from metrics import METRICS, plot_metrics
 from planner import reset_planner
 import numpy as np
-from minigrid.core.world_object import Wall, Goal
 
-# --- BFS SOLVER FOR SMART SEEDING ---
-def bfs_solve(env):
+# --- SIMPLE GEOMETRIC SOLVER (For MovingSquareEnv) ---
+def solve_geometric(env):
     """
-    Returns a list of actions [int] to walk from agent_pos to goal_pos
-    navigating around walls.
-    Actions: 0=Left, 1=Right, 2=Forward
+    Returns a list of actions to move the square to the goal.
+    Actions: 0:Up, 1:Down, 2:Left, 3:Right
     """
-    grid = env.env.unwrapped.grid
-    start_pos = env.env.unwrapped.agent_pos
-    start_dir = env.env.unwrapped.agent_dir # 0=East, 1=South, 2=West, 3=North
-    goal_pos = env.goal_pos
+    # Access positions directly from the simple env
+    curr = env.agent_pos.copy()
+    goal = env.goal_pos
+    path = []
     
-    # Queue: (x, y, dir, path_of_actions)
-    queue = [(start_pos[0], start_pos[1], start_dir, [])]
-    visited = set()
-    visited.add((start_pos[0], start_pos[1], start_dir))
-    
-    while queue:
-        x, y, d, path = queue.pop(0)
-        
-        if (x, y) == goal_pos:
-            return path # Found it!
-        
-        if len(path) > 30: continue # Limit depth
-        
-        # Try 3 possible moves: Left, Right, Forward
-        
-        # 1. Turn Left (Action 0)
-        new_d = (d - 1) % 4
-        if (x, y, new_d) not in visited:
-            visited.add((x, y, new_d))
-            queue.append((x, y, new_d, path + [0]))
+    # Limit max steps to prevent infinite loops (though unlikely here)
+    for _ in range(50):
+        if np.array_equal(curr, goal):
+            break
             
-        # 2. Turn Right (Action 1)
-        new_d = (d + 1) % 4
-        if (x, y, new_d) not in visited:
-            visited.add((x, y, new_d))
-            queue.append((x, y, new_d, path + [1]))
-            
-        # 3. Move Forward (Action 2)
-        # Get front cell
-        fx, fy = x, y
-        if d == 0: fx += 1
-        elif d == 1: fy += 1
-        elif d == 2: fx -= 1
-        elif d == 3: fy -= 1
+        dy = goal[0] - curr[0]
+        dx = goal[1] - curr[1]
         
-        # Check bounds and walls
-        if 0 <= fx < grid.width and 0 <= fy < grid.height:
-            cell = grid.get(fx, fy)
-            if cell is None or isinstance(cell, Goal): # Walkable
-                if (fx, fy, d) not in visited:
-                    visited.add((fx, fy, d))
-                    queue.append((fx, fy, d, path + [2]))
-                    
-    return [] # No path found
+        # Move along the larger distance axis
+        if abs(dx) >= abs(dy):
+            if dx > 0: 
+                path.append(3) # Right
+                curr[1] += 1
+            else:      
+                path.append(2) # Left
+                curr[1] -= 1
+        else:
+            if dy > 0: 
+                path.append(1) # Down
+                curr[0] += 1
+            else:      
+                path.append(0) # Up
+                curr[0] -= 1
+                
+    return path
 
 def seed_smart_wins(num_episodes=20):
-    print(f"Generating {num_episodes} SMART WINNING episodes (BFS Solved)...")
+    print(f"Generating {num_episodes} SMART WINNING episodes (Geometric Solved)...")
     wins = 0
     
     while wins < num_episodes:
@@ -76,27 +55,27 @@ def seed_smart_wins(num_episodes=20):
         obs_raw, _ = env.reset() 
         obs = preprocess_obs(obs_raw)
         
-        # 1. Solve
-        solution_actions = bfs_solve(env)
+        # 1. Solve (Simple calculation)
+        solution_actions = solve_geometric(env)
         
-        # CRITICAL FIX: Skip if path is too short for our sequence length
-        if len(solution_actions) < seq_len:
-            continue 
-            
         # 2. Execute
         done = False
         for action in solution_actions:
-            a_onehot = F.one_hot(torch.tensor(action), action_dim).float().to(DEVICE)
-            obs_next_raw, r, terminated, truncated, info, reached_goal = env.step(action)
-            done = terminated or truncated or reached_goal
+            a_onehot = F.one_hot(torch.tensor(action), num_classes=action_dim).float().to(DEVICE)
             
+            # Step the environment
+            obs_next_raw, r, done, _, _, reached_goal = env.step(action)
+            
+            # Add to buffer
             buffer.add_step(obs.cpu(), a_onehot.cpu(), r, done)
+            
             obs = preprocess_obs(obs_next_raw)
             if done: break
             
+        # Verify it actually worked (it should always work in this env)
         if done and r > 0: 
             wins += 1
-            print(f"  -> Seeded Win #{wins} (Length: {len(solution_actions)})")
+            # print(f"  -> Seeded Win #{wins} (Length: {len(solution_actions)})")
 
 buffer = ReplayBuffer(
     capacity_episodes=replay_buffer_capacity,
@@ -108,58 +87,51 @@ buffer = ReplayBuffer(
 
 def convergence_trainer():
     outer_iter = 0
-    with tqdm(total=max_steps, desc="Convergence Loop") as pbar:
+    # Increase outer loop speed by reducing total_env_steps in env_vars
+    with tqdm(total=max_steps, desc="Sanity Check Loop") as pbar:
 
         while not METRICS.has_converged():
             outer_iter += 1
 
-            # TRAIN with GOLDEN SAMPLING
-            # 20% of every batch will be drawn from known wins
-
-            if outer_iter % max(1, int(max_steps / total_env_steps / 20)) == 0:
-                seed_smart_wins(num_episodes=5)
+            # Seed winning demonstrations periodically to keep the buffer "happy"
+            if outer_iter % 10 == 0:
+                seed_smart_wins(num_episodes=2)
 
             train_sequence(
                 C=C,
-                dataset=buffer, # Pass the buffer instance
+                dataset=buffer, 
                 batch_size=batch_size,
                 seq_len=seq_len,
             )
 
             run_data_collection(buffer, pbar)
             
-            # ... (Rest of logging code remains the same) ...
             stats = METRICS.get_means()
             pbar.set_postfix({
-                "Loss": f"{stats['loss_total']:.4f}",
-                "Act": f"{stats['loss_actor']:.3f}",
+                "L": f"{stats['loss_total']:.4f}",
+                "Rec": f"{stats['recon_loss']:.4f}", # Watch this drop to 0.0000
                 "Ret": f"{stats['return']:.1f}", 
-                "Succ": f"{100*stats['success_rate']:.0f}%",
             })
 
-            # Hardcoded save path as requested
             if outer_iter % weight_save_freq_for_outer_iters == 0:
                 torch.save({
                     'rssm': rssmmodel.state_dict(),
                     'actor': actor_net.state_dict(),
                     'critic': critic_net.state_dict()
-                }, "rssm_final.pth")
+                }, "rssm_sanity.pth")
 
 if __name__ == "__main__":
-    # seed_replay_buffer() # <-- DELETE OLD
-    seed_smart_wins(num_episodes=25) # <-- INSERT NEW SMART SEEDER
+    # 1. Fill buffer with some perfect games initially
+    seed_smart_wins(num_episodes=10) 
+    
+    # 2. Start Training
     convergence_trainer()
     
+    # 3. Final Save
     torch.save({
         'rssm': rssmmodel.state_dict(),
         'actor': actor_net.state_dict(),
         'critic': critic_net.state_dict()
-    }, "rssm_final.pth")
+    }, "rssm_sanity.pth")
 
-    print("Saving metrics to training_log.txt...")
-    final_stats = METRICS.get_means()
-    with open("training_log.txt", "w") as f:
-        f.write("=== FINAL TRAINING METRICS ===\n")
-        for key, value in final_stats.items():
-            f.write(f"{key}: {value}\n")
-    print("Done.")
+    print("Sanity Check Complete.")
