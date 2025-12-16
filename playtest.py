@@ -135,19 +135,31 @@ def play():
             # --- 3. EXECUTE IN DREAM (RSSM) ---
             with torch.no_grad():
                 if controller.mode == "MANUAL":
-                    # === BLIND PRIOR STEP (OPEN LOOP) ===
-                    # 1. Update Deterministic State (GRU) using ONLY previous state + action
+                    # === BLIND PRIOR STEP (OPEN LOOP - V1 Gaussian) ===
+                    
+                    # 1. Update Deterministic State (GRU)
+                    # Input: Previous stochastic state 's' + Current Action 'a_curr'
                     gru_input = torch.cat([s, a_curr], dim=-1)
                     h = rssmmodel.gru(gru_input, h)
                     
                     # 2. Predict Stochastic State (Prior)
-                    logits_prior = rssmmodel.fc_prior(h)
-                    s = rssmmodel.get_stoch_state(logits_prior) # Sample from imagination
+                    # In V1, we predict Mean & LogSigma, then sample
+                    prior_hidden = rssmmodel.prior_fc(h)
+                    mu_prior = rssmmodel.prior_mu(prior_hidden)
+                    log_sigma_prior = rssmmodel.prior_log_sigma(prior_hidden)
+                    sigma_prior = torch.exp(log_sigma_prior)
+                    
+                    # Sample using reparameterization (Mean + Std * Noise)
+                    noise = torch.randn_like(sigma_prior)
+                    s = mu_prior + sigma_prior * noise
                     
                     # 3. Decode "Dream" Image
+                    # Input: New 's' + New 'h'
                     dec_input = torch.cat([s, h], dim=-1)
-                    x_dec = rssmmodel.fc_dec(dec_input)
-                    x_dec = x_dec.view(-1, 128, 3, 3)
+                    
+                    # Map back to spatial dimensions (Linear -> Reshape -> Deconv)
+                    x_dec = rssmmodel.fc(dec_input)
+                    x_dec = x_dec.view(-1, 128, 3, 3) 
                     o_recon = rssmmodel.decoder(x_dec)
                     
                     # Note: We completely IGNORED obs_next here!
