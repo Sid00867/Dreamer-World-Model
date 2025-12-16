@@ -80,82 +80,82 @@ class SimpleEnv(MiniGridEnv):
     def _gen_mission():
         return "reach the goal"
     
-    # def _gen_grid(self, width: int, height: int):
-    #     self.grid = Grid(width, height)
-
-    #     # Surrounding walls
-    #     self.grid.wall_rect(0, 0, width, height)
-
-    #     # Create reachable maze paths from spawn area → goal
-    #     # Left corridor (safe spawn zone)
-    #     for y in range(1, height-2):  
-    #         self.grid.set(1, y, None)  # Open path
-        
-    #     # Bottom corridor to goal  
-    #     for x in range(1, width-2):  
-    #         self.grid.set(x, height-2, None)
-        
-    #     # Strategic walls (don't block spawn!)
-    #     for y in range(3, 7):
-    #         self.grid.set(3, y, Wall())
-    #     for y in range(2, 6):
-    #         self.grid.set(6, y, Wall())
-        
-    #     # Scattered obstacles (avoid spawn area)
-    #     obstacles = [(4,4), (5,5), (7,3)]
-    #     for x, y in obstacles:
-    #         if 2 < x < width-2 and 2 < y < height-2:  # Safe distance from spawn
-    #             self.grid.set(x, y, Wall())
-
-    #     # Goal (clear path)
-    #     self.grid.set(width-2, height-2, None)
-    #     self.grid.set(width-2, height-2, Goal())
-    #     # self.goal_pos = (width-2, height-2)
-
-    #     # DYNAMIC AGENT PLACEMENT - Let MiniGrid find safe spot
-    #     self.place_agent()  # Auto-finds valid position (0,0) check passes
-        
-    #     self.mission = "reach the goal"
-
     def _gen_grid(self, width: int, height: int):
-        """
-        Generates a random valid grid. 
-        Retries until a solvable path from Agent -> Goal exists.
-        """
-        max_retries = 100
-        
-        for _ in range(max_retries):
-            # 1. Create empty grid with surrounding walls
-            self.grid = Grid(width, height)
-            self.grid.wall_rect(0, 0, width, height)
-
-            # 2. Randomize Goal Placement
-            # place_obj finds an empty spot automatically
-            self.goal_pos = self.place_obj(Goal(), max_tries=100)
-
-            # 3. Randomize Obstacles
-            # Density: 15-20% of the grid is obstacles. 
-            # 10x10 grid = 100 tiles. ~15 walls.
-            num_obstacles = int((width * height) * 0.15) 
-            
-            for _ in range(num_obstacles):
-                self.place_obj(Wall(), max_tries=100)
-
-            # 4. Randomize Agent Placement
-            self.place_agent()
-
-            # 5. CRITICAL: Check solvability
-            if self._is_reachable():
-                self.mission = "reach the goal"
-                return  # Success! Keep this grid.
-
-        # If we failed 100 times (super rare), fallback to a simple open room
-        # print("Warning: Map generation failed 100 times. Fallback to empty room.")
         self.grid = Grid(width, height)
+
+        # Surrounding walls
         self.grid.wall_rect(0, 0, width, height)
-        self.place_obj(Goal())
-        self.place_agent()
+
+        # Create reachable maze paths from spawn area → goal
+        # Left corridor (safe spawn zone)
+        for y in range(1, height-2):  
+            self.grid.set(1, y, None)  # Open path
+        
+        # Bottom corridor to goal  
+        for x in range(1, width-2):  
+            self.grid.set(x, height-2, None)
+        
+        # Strategic walls (don't block spawn!)
+        for y in range(3, 7):
+            self.grid.set(3, y, Wall())
+        for y in range(2, 6):
+            self.grid.set(6, y, Wall())
+        
+        # Scattered obstacles (avoid spawn area)
+        obstacles = [(4,4), (5,5), (7,3)]
+        for x, y in obstacles:
+            if 2 < x < width-2 and 2 < y < height-2:  # Safe distance from spawn
+                self.grid.set(x, y, Wall())
+
+        # Goal (clear path)
+        self.grid.set(width-2, height-2, None)
+        self.grid.set(width-2, height-2, Goal())
+        # self.goal_pos = (width-2, height-2)
+
+        # DYNAMIC AGENT PLACEMENT - Let MiniGrid find safe spot
+        self.place_agent()  # Auto-finds valid position (0,0) check passes
+        
         self.mission = "reach the goal"
+
+    # def _gen_grid(self, width: int, height: int):
+    #     """
+    #     Generates a random valid grid. 
+    #     Retries until a solvable path from Agent -> Goal exists.
+    #     """
+    #     max_retries = 100
+        
+    #     for _ in range(max_retries):
+    #         # 1. Create empty grid with surrounding walls
+    #         self.grid = Grid(width, height)
+    #         self.grid.wall_rect(0, 0, width, height)
+
+    #         # 2. Randomize Goal Placement
+    #         # place_obj finds an empty spot automatically
+    #         self.goal_pos = self.place_obj(Goal(), max_tries=100)
+
+    #         # 3. Randomize Obstacles
+    #         # Density: 15-20% of the grid is obstacles. 
+    #         # 10x10 grid = 100 tiles. ~15 walls.
+    #         num_obstacles = int((width * height) * 0.15) 
+            
+    #         for _ in range(num_obstacles):
+    #             self.place_obj(Wall(), max_tries=100)
+
+    #         # 4. Randomize Agent Placement
+    #         self.place_agent()
+
+    #         # 5. CRITICAL: Check solvability
+    #         if self._is_reachable():
+    #             self.mission = "reach the goal"
+    #             return  # Success! Keep this grid.
+
+    #     # If we failed 100 times (super rare), fallback to a simple open room
+    #     # print("Warning: Map generation failed 100 times. Fallback to empty room.")
+    #     self.grid = Grid(width, height)
+    #     self.grid.wall_rect(0, 0, width, height)
+    #     self.place_obj(Goal())
+    #     self.place_agent()
+    #     self.mission = "reach the goal"
 
     def _is_reachable(self):
         """

@@ -30,8 +30,8 @@ grad_clipping_value = 100.0
 
 # KL BALANCING (Crucial for V2)
 # We prioritize training the Prior (prediction) over the Posterior (representation)
-kl_balance = 0.8 
-kl_scale = 0.1    # V2 usually uses a smaller scale like 0.1 or 1.0
+kl_balance = 0.9 
+kl_scale = 1.0    # V2 usually uses a smaller scale like 0.1 or 1.0
 
 # ======================================================
 # PLANNING
@@ -52,7 +52,7 @@ actor_entropy_scale = 1e-3
 
 C = 75                      
 batch_size = 50              
-seq_len = 14                
+seq_len = 8                
 
 # ======================================================
 # EXPLORATION
