@@ -2,66 +2,88 @@ import time
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import os
+from matplotlib.widgets import Button
 
 from environment_variables import *
 from planner import plan, reset_planner
 from explore_sample import preprocess_obs
 from fitter import rssmmodel, actor_net 
 
-# Only init env if running as main to avoid double-launch
-if __name__ == "__main__":
-    playenv = make_play_env()
-else:
-    playenv = None
-
-MODEL_PATH = weights_path  
+# --- CONFIGURATION ---
 NUM_EPISODES = 5
-STEP_DELAY = 0.05  
+MANUAL_STEPS_DURATION = 15  # Increased to 15 so you can see the drift better
 
-def showimage(image):
-    if isinstance(image, np.ndarray):
-        if image.ndim == 3 and image.shape[2] == 3:
-            plt.imshow(image)
-            plt.show()
+def make_interactive_env():
+    return RLReadyEnv(
+        env_kind="simple",
+        size=10,
+        obs_mode="rgb",
+        obs_scope="partial",
+        render_mode="rgb_array", 
+        seed=42
+    )
+
+class DreamController:
+    def __init__(self):
+        self.mode = "AUTO" 
+        self.manual_steps_left = 0
+        self.next_action = None
+        self.waiting_for_input = False
+        
+    def on_key(self, event):
+        if event.key == 'm':
+            self.mode = "MANUAL"
+            self.manual_steps_left = MANUAL_STEPS_DURATION
             return
 
-    if hasattr(image, "detach"):
-        image = image.detach().cpu().numpy()
-    if image.ndim == 4:
-        image = image[0]
-    if image.shape[0] == 3:
-        image = image.transpose(1, 2, 0)
-    if image.max() > 1.0:
-        image = image / 255.0
+        if self.mode == "MANUAL" and self.waiting_for_input:
+            if event.key == 'left': self.next_action = 0
+            elif event.key == 'right': self.next_action = 1
+            elif event.key == 'up': self.next_action = 2
+            
+            if self.next_action is not None:
+                self.waiting_for_input = False 
 
-    plt.imshow(image)
-    plt.show()
-
-def play(random_exp):
-    if os.path.exists("rssm_final.pth"):
-        checkpoint = torch.load("rssm_final.pth", map_location=DEVICE)
-        rssmmodel.load_state_dict(checkpoint['rssm'])
-        actor_net.load_state_dict(checkpoint['actor'])
-        print("Loaded weights from rssm_final.pth")
+def play():
+    playenv = make_interactive_env()
+    
+    # Load weights
+    if torch.cuda.is_available():
+        checkpoint = torch.load("rssm_final.pth")
     else:
-        print("Warning: rssm_final.pth not found. Playing with random weights.")
-
+        checkpoint = torch.load("rssm_final.pth", map_location="cpu")
+        
+    rssmmodel.load_state_dict(checkpoint['rssm'])
+    actor_net.load_state_dict(checkpoint['actor'])
     rssmmodel.eval()
     actor_net.eval()
 
+    # Setup Plot
+    controller = DreamController()
+    plt.ion() 
+    fig, (ax_real, ax_dream) = plt.subplots(1, 2, figsize=(10, 5))
+    
+    ax_real.set_title("Reality (Ground Truth)")
+    ax_dream.set_title("Dream (Blind Prediction)")
+    ax_real.axis('off'); ax_dream.axis('off')
+
+    img_real = ax_real.imshow(np.zeros((28, 28, 3)))
+    img_dream = ax_dream.imshow(np.zeros((28, 28, 3)))
+    status_text = fig.suptitle("Mode: AUTO", fontsize=14, color='green')
+
+    fig.canvas.mpl_connect('key_press_event', controller.on_key)
+    print("Controls: 'm' = Manual Mode (Blind Dream) | Arrows = Move")
+
     for ep in range(NUM_EPISODES):
-
-        print(f"\nEpisode {ep + 1}/{NUM_EPISODES}")
-
         reset_planner()
         obs_raw, _ = playenv.reset()
         obs = preprocess_obs(obs_raw)
 
+        # Initialize State
         dummy_action = torch.zeros(1, action_dim, device=DEVICE)
         obs_embed = rssmmodel.obs_encoder(obs.unsqueeze(0))
         
-        # CORRECTED UNPACKING:
+        # Start with a grounded state
         _, _, _, _, h, s = rssmmodel.forward_train(
             h_prev=torch.zeros(1, deterministic_dim, device=DEVICE),
             s_prev=torch.zeros(1, latent_dim, device=DEVICE),
@@ -73,53 +95,89 @@ def play(random_exp):
         step = 0
 
         while not done:
+            fig.canvas.flush_events()
+            
+            # --- 1. DETERMINE ACTION ---
+            action_idx = 0
+            if controller.mode == "MANUAL":
+                status_text.set_text(f"MANUAL (BLIND DREAM) | Steps: {controller.manual_steps_left}")
+                status_text.set_color('red')
+                
+                controller.waiting_for_input = True
+                while controller.waiting_for_input:
+                    plt.pause(0.1) 
+                    if not plt.fignum_exists(fig.number): return
+                
+                action_idx = controller.next_action
+                controller.next_action = None 
+                
+                controller.manual_steps_left -= 1
+                if controller.manual_steps_left <= 0:
+                    controller.mode = "AUTO"
+            else:
+                status_text.set_text("AUTO (Posterior Corrected)")
+                status_text.set_color('green')
+                with torch.no_grad():
+                    a_onehot_plan = plan(h, s)
+                    action_idx = a_onehot_plan.argmax(-1).item()
+                plt.pause(0.05)
 
+            # Prepare Action Tensor
+            a_curr = torch.zeros(1, action_dim, device=DEVICE)
+            a_curr[0, action_idx] = 1.0
+
+            # --- 2. EXECUTE IN REALITY ---
+            # We step reality solely to update the "Ground Truth" display.
+            # In MANUAL mode, the model effectively DOES NOT SEE the result of this.
+            obs_next_raw, reward, terminated, truncated, info, _ = playenv.step(action_idx)
+            done = terminated or truncated
+            
+            # --- 3. EXECUTE IN DREAM (RSSM) ---
             with torch.no_grad():
-                state_features = torch.cat([s, h], dim=-1)
-                logits = actor_net(state_features)
-                probs = torch.nn.functional.softmax(logits, dim=-1)
-                
-                print(f"Action Probs: {probs[0].cpu().numpy().round(2)}, step = {step}")
-
-                a_onehot = plan(h, s) 
-
-                if a_onehot.dim() == 1:
-                    a_onehot = a_onehot.unsqueeze(0)
-
-                if random_exp:
-                    if torch.rand(1) < 0.15: 
-                        action = torch.randint(0, action_dim, (1,)).item()
-                    else:
-                        action = a_onehot.argmax(-1).item()
+                if controller.mode == "MANUAL":
+                    # === BLIND PRIOR STEP (OPEN LOOP) ===
+                    # 1. Update Deterministic State (GRU) using ONLY previous state + action
+                    gru_input = torch.cat([s, a_curr], dim=-1)
+                    h = rssmmodel.gru(gru_input, h)
+                    
+                    # 2. Predict Stochastic State (Prior)
+                    logits_prior = rssmmodel.fc_prior(h)
+                    s = rssmmodel.get_stoch_state(logits_prior) # Sample from imagination
+                    
+                    # 3. Decode "Dream" Image
+                    dec_input = torch.cat([s, h], dim=-1)
+                    x_dec = rssmmodel.fc_dec(dec_input)
+                    x_dec = x_dec.view(-1, 128, 3, 3)
+                    o_recon = rssmmodel.decoder(x_dec)
+                    
+                    # Note: We completely IGNORED obs_next here!
+                    
                 else:
-                    action = a_onehot.argmax(-1).item()
+                    # === POSTERIOR STEP (CLOSED LOOP) ===
+                    # We process the real image to "snap" the dream back to reality
+                    obs_next = preprocess_obs(obs_next_raw)
+                    obs_embed = rssmmodel.obs_encoder(obs_next.unsqueeze(0))
+                    
+                    # forward_train computes the Posterior
+                    _, _, o_recon, _, h, s = rssmmodel.forward_train(
+                        h_prev=h,
+                        s_prev=s,
+                        a_prev=a_curr, 
+                        o_embed=obs_embed
+                    )
 
-                obs_next_raw, reward, terminated, truncated, info, _ = playenv.step(action)
-                done = terminated or truncated
-
-                obs_next = preprocess_obs(obs_next_raw)
-                obs_embed = rssmmodel.obs_encoder(obs_next.unsqueeze(0))
-
-                # CORRECTED UNPACKING:
-                _, _, o_recon, _, h, s = rssmmodel.forward_train(
-                    h_prev=h,
-                    s_prev=s,
-                    a_prev=a_onehot, 
-                    o_embed=obs_embed
-                )
-
-                playenv.render()
-                
-                # Uncomment to debug visual reconstruction
-                # if step % 10 == 0:
-                #    showimage(o_recon)
-
-                obs = obs_next
-                step += 1
+            # --- 4. RENDER ---
+            # Left: Reality
+            img_real.set_data(obs_next_raw['image'])
+            
+            # Right: The Dream (Prior or Posterior depending on mode)
+            dream_np = o_recon[0].permute(1, 2, 0).cpu().numpy()
+            img_dream.set_data(np.clip(dream_np, 0, 1))
+            
+            fig.canvas.draw()
+            step += 1
 
         print(f"Episode finished in {step} steps")
 
-
 if __name__ == "__main__":
-    # Ensure this is FALSE to test the actual intelligence
-    play(True)
+    play()
