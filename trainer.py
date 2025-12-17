@@ -19,10 +19,9 @@ def bfs_solve(env):
     """
     grid = env.env.unwrapped.grid
     start_pos = env.env.unwrapped.agent_pos
-    start_dir = env.env.unwrapped.agent_dir # 0=East, 1=South, 2=West, 3=North
+    start_dir = env.env.unwrapped.agent_dir 
     goal_pos = env.goal_pos
-    
-    # Queue: (x, y, dir, path_of_actions)
+
     queue = [(start_pos[0], start_pos[1], start_dir, [])]
     visited = set()
     visited.add((start_pos[0], start_pos[1], start_dir))
@@ -31,26 +30,21 @@ def bfs_solve(env):
         x, y, d, path = queue.pop(0)
         
         if (x, y) == goal_pos:
-            return path # Found it!
+            return path 
         
-        if len(path) > 30: continue # Limit depth
+        if len(path) > 30: continue
         
-        # Try 3 possible moves: Left, Right, Forward
-        
-        # 1. Turn Left (Action 0)
+
         new_d = (d - 1) % 4
         if (x, y, new_d) not in visited:
             visited.add((x, y, new_d))
             queue.append((x, y, new_d, path + [0]))
-            
-        # 2. Turn Right (Action 1)
+    
         new_d = (d + 1) % 4
         if (x, y, new_d) not in visited:
             visited.add((x, y, new_d))
             queue.append((x, y, new_d, path + [1]))
-            
-        # 3. Move Forward (Action 2)
-        # Get front cell
+   
         fx, fy = x, y
         if d == 0: fx += 1
         elif d == 1: fy += 1
@@ -65,7 +59,7 @@ def bfs_solve(env):
                     visited.add((fx, fy, d))
                     queue.append((fx, fy, d, path + [2]))
                     
-    return [] # No path found
+    return []
 
 def seed_smart_wins(num_episodes=20):
     print(f"Generating {num_episodes} SMART WINNING episodes (BFS Solved)...")
@@ -76,14 +70,13 @@ def seed_smart_wins(num_episodes=20):
         obs_raw, _ = env.reset() 
         obs = preprocess_obs(obs_raw)
         
-        # 1. Solve
+
         solution_actions = bfs_solve(env)
         
-        # CRITICAL FIX: Skip if path is too short for our sequence length
+
         if len(solution_actions) < seq_len:
             continue 
-            
-        # 2. Execute
+
         done = False
         for action in solution_actions:
             a_onehot = F.one_hot(torch.tensor(action), action_dim).float().to(DEVICE)
@@ -113,22 +106,19 @@ def convergence_trainer():
         while not METRICS.has_converged():
             outer_iter += 1
 
-            # TRAIN with GOLDEN SAMPLING
-            # 20% of every batch will be drawn from known wins
 
             if outer_iter % max(1, int(max_steps / total_env_steps / 20)) == 0:
                 seed_smart_wins(num_episodes=5)
 
             train_sequence(
                 C=C,
-                dataset=buffer, # Pass the buffer instance
+                dataset=buffer,
                 batch_size=batch_size,
                 seq_len=seq_len,
             )
 
             run_data_collection(buffer, pbar)
             
-            # ... (Rest of logging code remains the same) ...
             stats = METRICS.get_means()
             pbar.set_postfix({
                 "Loss": f"{stats['loss_total']:.4f}",
@@ -137,7 +127,6 @@ def convergence_trainer():
                 "Succ": f"{100*stats['success_rate']:.0f}%",
             })
 
-            # Hardcoded save path as requested
             if outer_iter % weight_save_freq_for_outer_iters == 0:
                 torch.save({
                     'rssm': rssmmodel.state_dict(),
@@ -146,8 +135,7 @@ def convergence_trainer():
                 }, "rssm_final.pth")
 
 if __name__ == "__main__":
-    # seed_replay_buffer() # <-- DELETE OLD
-    seed_smart_wins(num_episodes=25) # <-- INSERT NEW SMART SEEDER
+    seed_smart_wins(num_episodes=25) 
     convergence_trainer()
     
     torch.save({

@@ -29,10 +29,8 @@ class ReplayBuffer:
 
         # Episode Construction
         self._cur_ep_len = 0
-        self._cur_ep_reward = 0.0 # Track total reward to detect wins
-
-        # --- GOLDEN SAMPLING ---
-        self.winning_episodes = set() # Store indices of successful episodes
+        self._cur_ep_reward = 0.0 
+        self.winning_episodes = set() 
 
     def add_step(self, obs, action, reward, done):
         ep = self.ptr
@@ -55,22 +53,18 @@ class ReplayBuffer:
             self._finalize_episode()
 
     def _finalize_episode(self):
-        # 1. Check if we are overwriting an old winner
+
         if self.ptr in self.winning_episodes:
             self.winning_episodes.remove(self.ptr)
 
-        # 2. Check if NEW episode is a winner
-        # Heuristic: If total reward is positive, it's a win (since step penalties are negative)
-        # You can also pass an explicit 'success' flag to add_step if you prefer
         if self._cur_ep_reward > 0.0: 
             self.winning_episodes.add(self.ptr)
 
-        # 3. Advance Pointers
         self.lengths[self.ptr] = self._cur_ep_len
         self.ptr = (self.ptr + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
         
-        # 4. Reset Trackers
+
         self._cur_ep_len = 0
         self._cur_ep_reward = 0.0
 
@@ -83,31 +77,29 @@ class ReplayBuffer:
         # Calculate split
         num_golden = int(batch_size * golden_ratio)
         num_random = batch_size - num_golden
-        
-        # If we have no wins yet, default to full random
+
         if len(self.winning_episodes) == 0:
             num_golden = 0
             num_random = batch_size
 
         indices = []
         
-        # 1. Pick Golden Episodes
+
         if num_golden > 0:
             golden_list = list(self.winning_episodes)
             for _ in range(num_golden):
                 indices.append(random.choice(golden_list))
                 
-        # 2. Pick Random Episodes
+
         for _ in range(num_random):
             indices.append(random.randint(0, self.size - 1))
-            
-        # 3. Retrieve Data
+
         batch_obs, batch_act, batch_rew, batch_done = [], [], [], []
         
         for ep in indices:
             ep_len = self.lengths[ep].item()
             
-            # Safety: If selected episode is too short (rare), resample random
+
             if ep_len < seq_len:
                 while True:
                     ep = random.randint(0, self.size - 1)
@@ -127,10 +119,6 @@ class ReplayBuffer:
             torch.stack(batch_rew).to(self.device),
             torch.stack(batch_done).to(self.device)
         )
-
-    # --------------------------------------------------------
-    # UTILITIES
-    # --------------------------------------------------------
 
     def __len__(self):
         return self.size

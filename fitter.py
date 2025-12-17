@@ -15,20 +15,14 @@ actor_optimizer = optim.Adam(actor_net.parameters(), lr=actor_lr, eps=1e-5)
 critic_optimizer = optim.Adam(critic_net.parameters(), lr=value_lr, eps=1e-5)
 
 def calculate_lambda_returns(rewards, values, gamma=gamma, lambda_=lambda_):
-    """
-    Computes the 'Lambda Target' - a mix of immediate reward and 
-    long-term value estimates. This stabilizes training.
-    """
+
     returns = torch.zeros_like(rewards)
-    next_return = values[-1] # Bootstrap from last step
+    next_return = values[-1] 
     
-    # Iterate backwards through time
     for t in reversed(range(len(rewards) - 1)):
         r_t = rewards[t]
         v_next = values[t+1]
         
-        # Bellman equation with lambda smoothing
-        # Target = Reward + Gamma * ( (1-lambda)*Value_Next + lambda*Return_Next )
         returns[t] = r_t + gamma * ( (1 - lambda_) * v_next + lambda_ * next_return )
         next_return = returns[t]
         
@@ -59,20 +53,11 @@ def compute_model_loss(o_t, o_embed, a_t, r_t, h_prev, s_prev):
 
 def train_actor_critic(start_h, start_s):
     
-    """
-    1. Detaches state from real world (stops gradients leaking to RSSM)
-    2. Imagines a future trajectory using the Actor
-    3. Calculates value targets
-    4. Updates Actor (maximize Value) and Critic (predict Value)
-    """
-    
-    # Detach start states so we don't update RSSM here
     start_h = start_h.detach()
     start_s = start_s.detach()
     
     h_seq, s_seq, action_seq = rssmmodel.imagine_rollout(actor_net, start_h, start_s, horizon=imagination_horizon)
     
-    # Flatten time/batch for simpler processing
     seq_len, batch, _ = h_seq.shape
     flat_h = h_seq.view(-1, deterministic_dim)
     flat_s = s_seq.view(-1, latent_dim)
@@ -84,11 +69,9 @@ def train_actor_critic(start_h, start_s):
     
     lambda_targets = calculate_lambda_returns(imagined_rewards, imagined_values)
     
-
-    #CALCULATE ENTROPY
     current_logits = actor_net(target_input).view(seq_len, batch, -1)
     current_dist = torch.distributions.OneHotCategorical(logits=current_logits)
-    entropy = current_dist.entropy() # Shape: (Seq, Batch)
+    entropy = current_dist.entropy() 
     
     # We want the actor to pick actions that lead to high Lambda Returns.
     # Since optimizers minimize, we take the negative mean.
@@ -110,11 +93,9 @@ def train_actor_critic(start_h, start_s):
     actor_loss.backward(retain_graph=True) 
     critic_loss.backward()
     
-    # Clip grads
     torch.nn.utils.clip_grad_norm_(actor_net.parameters(), grad_clipping_value)
     torch.nn.utils.clip_grad_norm_(critic_net.parameters(), grad_clipping_value)
-    
-    # Update weights (Only now is it safe to modify parameters)
+
     actor_optimizer.step()
     critic_optimizer.step()
     
@@ -184,18 +165,12 @@ def train_sequence(C, dataset, batch_size, seq_len):
         torch.nn.utils.clip_grad_norm_(rssmmodel.parameters(), grad_clipping_value)
         model_optimizer.step()
 
-        # Train Actor & Critic
-        # We take all the posterior states we just calculated (the "Real" states)
-        # and use them as starting points for Dreams.
-        
-        # Stack: (Seq_Len * Batch, Dim)
+
         start_h = torch.cat(posterior_h_list, dim=0) 
         start_s = torch.cat(posterior_s_list, dim=0)
         
         act_loss, crit_loss = train_actor_critic(start_h, start_s)
 
-        # Logging (Optional: You can add these to metrics hooks if you want)
-        # print(f"Actor: {act_loss:.3f} | Critic: {crit_loss:.3f}")
 
         log_training_step(
                     total_loss    = (total_loss_accum / seq_len).item(),

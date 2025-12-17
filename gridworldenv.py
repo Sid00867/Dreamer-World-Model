@@ -1,9 +1,5 @@
 from __future__ import annotations
-# from environment_variables import env_grid_size_,tile_size_,see_through_walls_
 
-# ===================================================
-# >>> CENTRAL ENV CONFIG  <<<
-# ===================================================
 
 ENV_GRID_SIZE     = 10
 TILE_SIZE         = 4
@@ -11,7 +7,7 @@ SEE_THROUGH_WALLS = True
 
 # ===================================================
 
-KEYCORRIDOR_ROOM_SIZE = 3         # For KeyCorridorEnv
+KEYCORRIDOR_ROOM_SIZE = 3        
 KEYCORRIDOR_NUM_ROOMS = 1
 
 AGENT_START_POS        = (1, 1)
@@ -39,10 +35,6 @@ from minigrid.wrappers import (
 
 # Built-in MiniGrid envs
 from minigrid.envs import DoorKeyEnv, KeyCorridorEnv
-
-# ===================================
-# Custom MiniGrid Environment
-# ===================================
 
 class SimpleEnv(MiniGridEnv):
     """
@@ -199,11 +191,6 @@ class SimpleEnv(MiniGridEnv):
 
 
 
-
-# ===================================================
-# RL-Ready Wrapper (Unified interface for all envs)
-# ===================================================
-
 ObsMode = Literal["symbolic", "rgb"]
 ObsScope = Literal["partial", "full"]
 EnvKind = Literal["simple", "doorkey", "keycorridor"]
@@ -330,15 +317,10 @@ class RLReadyEnv:
         else:
             raise ValueError(f"Unknown env_kind: {env_kind}")
 
-    # -------------------------------------------------
-    # Pass-through gym helpers
-    # -------------------------------------------------
+
 
     def reset(self, **kwargs):
-        # >>> FORCE RANDOM SEEDING <<<
-        # If no seed is provided, generate a random one.
-        # This ensures the agent spawns in a new location every episode
-        # and the world model learns global features, not just one path.
+
         if "seed" not in kwargs:
             kwargs["seed"] = np.random.randint(0, 2**31 - 1)
             

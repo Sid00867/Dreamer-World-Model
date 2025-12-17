@@ -9,9 +9,9 @@ from planner import plan, reset_planner
 from explore_sample import preprocess_obs
 from fitter import rssmmodel, actor_net 
 
-# --- CONFIGURATION ---
+
 NUM_EPISODES = 5
-MANUAL_STEPS_DURATION = 15  # Increased to 15 so you can see the drift better
+MANUAL_STEPS_DURATION = 15  
 
 def make_interactive_env():
     return RLReadyEnv(
@@ -96,8 +96,7 @@ def play():
 
         while not done:
             fig.canvas.flush_events()
-            
-            # --- 1. DETERMINE ACTION ---
+
             action_idx = 0
             if controller.mode == "MANUAL":
                 status_text.set_text(f"MANUAL (BLIND DREAM) | Steps: {controller.manual_steps_left}")
@@ -122,55 +121,42 @@ def play():
                     action_idx = a_onehot_plan.argmax(-1).item()
                 plt.pause(0.05)
 
-            # Prepare Action Tensor
+
             a_curr = torch.zeros(1, action_dim, device=DEVICE)
             a_curr[0, action_idx] = 1.0
 
-            # --- 2. EXECUTE IN REALITY ---
-            # We step reality solely to update the "Ground Truth" display.
-            # In MANUAL mode, the model effectively DOES NOT SEE the result of this.
+
             obs_next_raw, reward, terminated, truncated, info, _ = playenv.step(action_idx)
             done = terminated or truncated
             
-            # --- 3. EXECUTE IN DREAM (RSSM) ---
+
             with torch.no_grad():
                 if controller.mode == "MANUAL":
-                    # === BLIND PRIOR STEP (OPEN LOOP - V1 Gaussian) ===
-                    
-                    # 1. Update Deterministic State (GRU)
-                    # Input: Previous stochastic state 's' + Current Action 'a_curr'
+
                     gru_input = torch.cat([s, a_curr], dim=-1)
                     h = rssmmodel.gru(gru_input, h)
                     
-                    # 2. Predict Stochastic State (Prior)
-                    # In V1, we predict Mean & LogSigma, then sample
+
                     prior_hidden = rssmmodel.prior_fc(h)
                     mu_prior = rssmmodel.prior_mu(prior_hidden)
                     log_sigma_prior = rssmmodel.prior_log_sigma(prior_hidden)
                     sigma_prior = torch.exp(log_sigma_prior)
-                    
-                    # Sample using reparameterization (Mean + Std * Noise)
+
                     noise = torch.randn_like(sigma_prior)
                     s = mu_prior + sigma_prior * noise
-                    
-                    # 3. Decode "Dream" Image
-                    # Input: New 's' + New 'h'
+
                     dec_input = torch.cat([s, h], dim=-1)
-                    
-                    # Map back to spatial dimensions (Linear -> Reshape -> Deconv)
+
                     x_dec = rssmmodel.fc(dec_input)
                     x_dec = x_dec.view(-1, 128, 3, 3) 
                     o_recon = rssmmodel.decoder(x_dec)
-                    
-                    # Note: We completely IGNORED obs_next here!
+
                     
                 else:
-                    # === POSTERIOR STEP (CLOSED LOOP) ===
-                    # We process the real image to "snap" the dream back to reality
+
                     obs_next = preprocess_obs(obs_next_raw)
                     obs_embed = rssmmodel.obs_encoder(obs_next.unsqueeze(0))
-                    
-                    # forward_train computes the Posterior
+
                     _, _, o_recon, _, h, s = rssmmodel.forward_train(
                         h_prev=h,
                         s_prev=s,
@@ -178,11 +164,8 @@ def play():
                         o_embed=obs_embed
                     )
 
-            # --- 4. RENDER ---
-            # Left: Reality
             img_real.set_data(obs_next_raw['image'])
-            
-            # Right: The Dream (Prior or Posterior depending on mode)
+
             dream_np = o_recon[0].permute(1, 2, 0).cpu().numpy()
             img_dream.set_data(np.clip(dream_np, 0, 1))
             

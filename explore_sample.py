@@ -55,8 +55,6 @@ def run_data_collection(buffer, pbar):
 
             action = a_onehot.argmax(-1).item()
 
-            # --- ACTION STEP ---
-            # No inner loop needed since repeat is 1
             obs_next_raw, r, terminated, truncated, info, reached_goal = env.step(action)
             
             env_steps += 1
@@ -66,10 +64,7 @@ def run_data_collection(buffer, pbar):
 
             done = terminated or truncated
 
-            # --- BUG FIX: DO NOT BREAK HERE ON DONE ---
-            # Only break if we hit the TOTAL step limit for this cycle
             if env_steps >= total_env_steps:
-                # We still need to store this last step before breaking!
                 pass 
             
             obs_next = preprocess_obs(obs_next_raw)
