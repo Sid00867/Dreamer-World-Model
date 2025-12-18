@@ -4,7 +4,7 @@ This repository contains my implementation of **DreamerV1**, a world-model–bas
 
 The implementation was built to better understand how latent imagination works in practice and to experimentally evaluate its behavior in environments outside the original DeepMind Control Suite, particularly **Gridworld-style tasks**.
 
-A detailed write-up of the motivation, architecture, experiments, and failure analysis can be found here:
+I personally wrote a detailed breakdown of the implementation, experiments, and insights here:
 
 👉 **Medium article:**  
 [Planning by Dreaming: Why DreamerV1 Breaks in Simple Worlds](https://medium.com/@siddhartharduino/planning-by-dreaming-why-dreamerv1-breaks-in-simple-worlds-64ef14acd82a)
