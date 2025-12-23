@@ -6,7 +6,7 @@ The implementation was built to better understand how latent imagination works i
 
 I personally wrote a detailed breakdown of the implementation, experiments, and insights here:
 
-👉 **Medium article:**  
+👉 **My Medium article:**  
 [Planning by Dreaming: Why DreamerV1 Breaks in Simple Worlds](https://medium.com/@siddhartharduino/planning-by-dreaming-why-dreamerv1-breaks-in-simple-worlds-64ef14acd82a)
 
 ---
