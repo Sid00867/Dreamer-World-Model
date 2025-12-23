@@ -1,6 +1,6 @@
-# DreamerV1 — A World Model–Based Reinforcement Learning Implementation
+# DreamerV1
 
-This repository contains my implementation of **DreamerV1**, a world-model–based reinforcement learning algorithm that learns latent dynamics using a Recurrent State Space Model (RSSM) and trains policies via imagination rollouts.
+This repository contains my implementation of **DreamerV1**, a world-model–based RL architecture that learns latent dynamics using a RSSM and trains policies via imagination rollouts.
 
 The implementation was built to better understand how latent imagination works in practice and to experimentally evaluate its behavior in environments outside the original DeepMind Control Suite, particularly **Gridworld-style tasks**.
 
